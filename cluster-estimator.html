@@ -210,6 +210,40 @@
     </div>
   </div>
 
+  <!-- CE-007: Serving Engine Card -->
+  <div class="card">
+    <h2>Serving Engine (CE-007)</h2>
+    <div class="field">
+      <label>Serving Engine</label>
+      <select id="servingEngine" onchange="recalculate()">
+        <option value="raw">Raw (no engine — baseline)</option>
+        <option value="vllm" selected>vLLM (paged attention)</option>
+        <option value="sglang">SGLang</option>
+        <option value="tgi">TGI (Text Generation Inference)</option>
+      </select>
+    </div>
+    <div id="vllmFields">
+      <div class="row">
+        <div class="field">
+          <label>Block Size</label>
+          <select id="vllmBlockSize" onchange="recalculate()">
+            <option value="16" selected>16</option>
+            <option value="32">32</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Max Batched Tokens</label>
+          <input type="number" id="vllmMaxNumBatchedTokens" value="8192" min="256" max="65536">
+        </div>
+      </div>
+      <div class="field">
+        <label>Max Sequences</label>
+        <input type="number" id="vllmMaxNumSeqs" value="256" min="1" max="1024">
+      </div>
+    </div>
+    <div class="notes" id="engineNotes">vLLM with paged attention — KV waste reduced from 30% to 15% vs raw</div>
+  </div>
+
   <div class="card">
     <h2>Cloud Pricing</h2>
     <div class="field">
@@ -276,6 +310,10 @@
     <div class="metric"><div class="value" id="rCostOutput">—</div><div class="label">Output Cost $/1M tok (CE-005)</div></div>
     <!-- CE-006: Breakeven metric -->
     <div class="metric"><div class="value" id="rBreakeven">—</div><div class="label">Breakeven tok/mo (CE-006)</div></div>
+    <!-- CE-007: Serving engine overhead metrics -->
+    <div class="metric"><div class="value" id="rEffectiveThroughput">—</div><div class="label">Eff. Throughput tok/s (CE-007)</div></div>
+    <div class="metric"><div class="value" id="rKvWastePct">—</div><div class="label">KV Waste % (CE-007)</div></div>
+    <div class="metric"><div class="value" id="rBatchEfficiency">—</div><div class="label">Batch Efficiency (CE-007)</div></div>
   </div>
   <div class="notes" id="notes" style="margin-top:16px"></div>
 </div>
@@ -358,6 +396,14 @@ const API_PRICING = {
     'gemma-3-27b':       { input: 0.15, output: 0.20 },
     'mistral-large-2':   { input: 1.50, output: 4.50 },
   },
+};
+
+// CE-007: Serving engine overhead models (Phase 3 — Serving Engines)
+const SERVING_OVERHEAD = {
+  raw:    { kvWaste: 1.30, prefillEff: 1.00, batchEff: 1.00 },
+  vllm:   { kvWaste: 1.15, prefillEff: 0.85, batchEff: 0.70 },
+  sglang: { kvWaste: 1.10, prefillEff: 0.80, batchEff: 0.65 },
+  tgi:    { kvWaste: 1.20, prefillEff: 0.90, batchEff: 0.75 },
 };
 
 const MODEL_PRESETS = {
@@ -497,6 +543,13 @@ function recalculate() {
   const pp = parseInt(document.getElementById('ppSize').value);
   const gpu = getGpuSpec();
 
+  // CE-007: Serving engine overhead
+  const servingEngine = document.getElementById('servingEngine').value;
+  const engineCfg = SERVING_OVERHEAD[servingEngine] || SERVING_OVERHEAD['raw'];
+  const vllmBlockSize = parseInt(document.getElementById('vllmBlockSize').value) || 16;
+  const vllmMaxNumBatchedTokens = parseInt(document.getElementById('vllmMaxNumBatchedTokens').value) || 8192;
+  const vllmMaxNumSeqs = parseInt(document.getElementById('vllmMaxNumSeqs').value) || 256;
+
   const totalGpus = gpusPerServer * numServers;
   const effectiveParallel = Math.ceil(totalGpus / (tp * pp));
 
@@ -507,10 +560,12 @@ function recalculate() {
   const kvPerTokenBytes = 2 * nLayers * nKvHeads * headDim * (kvBpw / 8);
   const kvCacheGB = (kvPerTokenBytes * ctxLen * batchSize) / 1e9;
   const kvWithOverhead = kvCacheGB * (1 + overhead);
+  // CE-007: Apply serving engine KV waste (paged attention reduces fragmentation)
+  const kvEngineOverhead = kvWithOverhead * engineCfg.kvWaste;
 
   const tensorMemGB = paramsB * (quantBpw / 8); // full model for TP splitting
   const modelPerGpuGB = tensorMemGB / (tp * pp);
-  const kvPerGpuGB = servingMode === 'disaggregated' ? kvWithOverhead : kvWithOverhead / tp;
+  const kvPerGpuGB = servingMode === 'disaggregated' ? kvEngineOverhead : kvEngineOverhead / tp;
 
   const totalPerGpuGB = modelPerGpuGB * (1 + overhead) + kvPerGpuGB;
   const gpusNeeded = Math.ceil(totalPerGpuGB / (gpu.vram * 0.90));
