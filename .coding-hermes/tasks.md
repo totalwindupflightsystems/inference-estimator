@@ -27,7 +27,7 @@
 
 ## Phase 5: Throughput Modeling
 - [x] **CE-013**: Prefill throughput (tokens/sec) separate from decode throughput — 8eb7791
-- [ ] **CE-014**: Time-to-first-token (TTFT) estimate based on prompt length
+- [x] **CE-014**: Time-to-first-token (TTFT) estimate based on prompt length — 8de0c80
 - [ ] **CE-015**: Speculative decoding throughput boost estimates
 - [ ] **CE-016**: Concurrent user modeling (requests/sec at target latency)
 
@@ -304,3 +304,43 @@
 - getConfig/setConfig: promptLen, prefillComputeEff, prefillBatchSize
 - GitReins: tier1 PASS
 - 8 tasks remain: CE-014/015/016 (Phase 5), CE-017–CE-021 (Phase 6)
+
+## Tick #6 — 2026-07-30 21:16 UTC — CE-014 dispatched + completed (Phase 5: 2/4)
+
+**Ground Truth:**
+- Scheduler: CooldownS=900, DecayRate=0.0, Enabled=1, Weight=10, Priority=8, Updated=2026-07-30T21:09:01Z (DB-verified)
+- DuckBrain: 1 key (`/project/inference-estimator/identity`), namespace active
+- GitReins: 14 tasks (CE-001 through CE-014 complete), 2 pending (CE-015, CE-016)
+- Workdir: Clean after CE-014 commit
+
+**NEVER-DONE Audit (14-gate sweep):**
+
+| Gate | Status | Detail |
+|------|--------|--------|
+| 0 Scheduler | ✅ | CooldownS=900, DecayRate=0.0, DB-verified |
+| 1 Build | N/A | Static HTML |
+| 2 Tests | N/A | No test framework |
+| 3 Vet/Lint | N/A | Single HTML file |
+| 4 Formatter | N/A | Single file |
+| 5 TODOs/FIXMEs | ✅ | Zero TODOs/FIXMEs (1419 lines) |
+| 6 Hilo | N/A | Static HTML |
+| 7 GitReins | ✅ | 14 complete, 2 pending, guard PASS |
+| 8 DuckBrain | ✅ | 1 key, namespace active |
+| 9 CI | N/A | No GitHub Actions |
+| 10 Deps | N/A | Zero dependencies |
+| 11 Docs | ✅ | 9/9 — all community docs present |
+| 12 Middle-out | N/A | Not a Go project |
+| 13 E2E | ✅ | HTML: 1419 lines, 231{/232} braces (pre-existing -1 imbalance), all 11 feature constants present, 9 TTFT refs |
+| 14 GitReins judge | ✅ | CE-014: tier1 PASS |
+
+**Task Scan:**
+- CE-014 ✅ dispatched + completed (worker, commit 8de0c80, +20 lines, 1419 lines total)
+  - Added 3 TTFT metrics in Results: rTTFT (base ms), rTTFTBatched (with queuing), rTtftReady (with model load)
+  - Added Batch Queuing Factor note in Prefill Throughput card
+  - TTFT model: promptLen / effectivePrefillTps * 1000, batched factor = 1 + (prefillBatchSize - 1) * 0.15
+  - GitReins: tier1 PASS
+- 2 tasks remain in Phase 5: CE-015, CE-016
+- 5 tasks in Phase 6: CE-017 through CE-021 (not yet created as GitReins tasks)
+- 7 tasks remain total
+
+**Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s, Judge=PASS
