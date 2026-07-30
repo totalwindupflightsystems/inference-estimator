@@ -15,10 +15,10 @@
 - [x] **CE-005**: Cost-per-1M-tokens estimate (input/output split) — worker completed, +185 lines
 - [x] **CE-006**: Breakeven analysis: self-hosted vs API (OpenRouter, Together, Fireworks) — worker completed, +203 lines total
 
-## Phase 3: Serving Engine Models
+## Phase 3: Serving Engine Models ✅ — completed 2026-07-30 tick 4
 - [x] **CE-007**: vLLM overhead model (paged attention, prefill batching behavior)
-- [ ] **CE-008**: SGLang RadixAttention cache-aware scheduling impact
-- [ ] **CE-009**: TGI continuous batching efficiency
+- [x] **CE-008**: SGLang RadixAttention cache-aware scheduling impact — 8360dff
+- [x] **CE-009**: TGI continuous batching efficiency — 2031e08
 
 ## Phase 4: Advanced Topology
 - [ ] **CE-010**: NVLink domain modeling (within-node bandwidth vs cross-node)
@@ -232,3 +232,5 @@
 - Fixed GitReins judge config: added `defaults.model: deepseek-v4-flash` + `api_key_env: GITREINS_LLM_API_KEY` (script now PASS)
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s (DecayRate=0), Judge=PASS
+
+**Correction (second session — 20:14 UTC):** Phase 3 checkboxes fixed (CE-008/CE-009 were [ ] despite sibling commits 8360dff/2031e08). Phase 4 GitReins tasks CE-010/011/012 created. DuckBrain: 3 entries (tick/4 just added). HTML verified: 1025 lines, 259 balanced braces, all 76 JS element IDs match HTML ids. Guard PASS (secrets clean). 12 tasks remain (Phases 4-6).
