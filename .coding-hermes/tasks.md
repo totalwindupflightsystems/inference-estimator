@@ -177,3 +177,58 @@
 - GitReins tasks created for CE-008 and CE-009
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=12/12 (self-fixed), Cooldown=900s
+
+## Tick #4 — 2026-07-30 20:14 UTC — CE-008 + CE-009 dispatched + completed (Phase 3 done)
+
+**Ground Truth:**
+- Scheduler: CooldownS=900, DecayRate=0 (fixed this tick), Enabled=1, UpdatedAt=2026-07-30T20:07:37Z (DB-verified)
+- DuckBrain: 2 entries (`identity` + `tick/2`), namespace active
+- GitReins: 9 tasks (CE-001 through CE-009 complete), 0 pending
+- Workdir: 1 dirty file (.gitreins/config.yaml — defaults.model fix this tick)
+
+**NEVER-DONE Audit (14-gate sweep):**
+
+| Gate | Status | Detail |
+|------|--------|--------|
+| 0 Scheduler | ✅ | CooldownS=900, DecayRate=0 (fixed), DB-verified |
+| 1 Build | N/A | Static HTML |
+| 2 Tests | N/A | No test framework |
+| 3 Vet/Lint | N/A | Single HTML file |
+| 4 Formatter | N/A | Single file |
+| 5 TODOs/FIXMEs | ✅ | Zero in cluster-estimator.html (1026 lines) |
+| 6 Hilo | N/A | Static HTML |
+| 7 GitReins | ✅ | 9 complete, 0 pending, guard PASS |
+| 8 DuckBrain | ✅ | 2 entries, namespace active |
+| 9 CI | N/A | No GitHub Actions |
+| 10 Deps | N/A | Zero dependencies |
+| 11 Docs | ✅ 9/9 | All 9 community docs present |
+| 12 Middle-out | N/A | Not a Go project |
+| 13 E2E | ✅ | HTML valid: DOCTYPE, scripts, SGLANG_RADIX, TGI_DEFAULTS, all 14 feature markers present. 1026 lines, 55KB |
+| 14 GitReins judge | ✅ | Fixed this tick: added defaults.model=deepseek-v4-flash + api_key_env. Script PASS |
+
+**Task Scan:**
+- CE-008 ✅ dispatched + completed (commit 8360dff, +40 lines net, 1025 lines)
+  - SGLANG_RADIX config: cacheHitRate slider (0-1), prefixCacheSize (GB), radixTreeOverhead (%)
+  - sglangFields div with show/hide logic on engine selection
+  - Radix-aware throughput: weighted combined model (hit boost 1.5x, miss penalty)
+  - Prefix cache VRAM tradeoff wired into totalPerGpuGB
+  - Results: rSglangRadixThroughput, rSglangCacheNote
+  - Export/import/save/load: all 3 SGLang fields
+- CE-009 ✅ dispatched + completed (commit 2031e08, +98 lines)
+  - TGI_DEFAULTS: maxBatchSize=128, maxWaitingSeqs=256, maxTotalTokens=65536
+  - tgiFields div with show/hide logic on engine selection
+  - Continuous batching throughput: combinedConstraint × batchEff multiplier
+  - Queue depth latency notes: p50 TTFT at light/medium/heavy load
+  - TGI vs vLLM comparison metric in Results
+  - Export/import/save/load: all 3 TGI fields
+- Phase 3 (Serving Engines): COMPLETE ✅ — CE-007, CE-008, CE-009 all done
+- Phase 4 (Advanced Topology): CE-010, CE-011, CE-012 — 3 tasks ready
+- Phase 5 (Throughput): CE-013, CE-014, CE-015, CE-016 — 4 tasks
+- Phase 6 (Polish): CE-017, CE-018, CE-019, CE-020, CE-021 — 5 tasks
+- 12 tasks remain across Phases 4-6
+
+**Foreman-direct fixes:**
+- Fixed DecayRate=1 → 0 to prevent cooldown drift (scheduler PUT verified)
+- Fixed GitReins judge config: added `defaults.model: deepseek-v4-flash` + `api_key_env: GITREINS_LLM_API_KEY` (script now PASS)
+
+**Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s (DecayRate=0), Judge=PASS

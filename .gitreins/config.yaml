@@ -13,6 +13,10 @@ guards:
   secrets:
     enabled: true
 
+defaults:
+  model: deepseek-v4-flash
+  api_key_env: GITREINS_LLM_API_KEY
+
 evaluator:
   model: deepseek-v4-flash
   max_iterations: 30
