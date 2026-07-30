@@ -17,3 +17,8 @@
 
 # Pytest
 .pytest_cache/
+
+# DAGger artifacts
+dagger.db
+dagger.db-journal
+dagger.db-*
