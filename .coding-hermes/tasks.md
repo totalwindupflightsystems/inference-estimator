@@ -83,3 +83,42 @@
 - Expanded .gitignore: secrets (.env/.env.*), foreman (.coding-hermes/), Hilo cache, pytest cache
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=partial (4/12), Cooldown=900s
+
+## Tick #2 — 2026-07-30 18:53 UTC — CE-004 dispatched + completed (first productive tick)
+
+**Ground Truth:**
+- Scheduler: CooldownS=900, enabled=1, updated=2026-07-30T18:14:41Z (DB-verified — matches board)
+- DuckBrain: 1 key (`/project/inference-estimator/identity`) — matches board
+- Board-gap: None — git log tick 1 matches board tick 1
+- GitReins: 4 tasks (CE-001/002/003 completed, CE-004 dispatched this tick)
+
+**NEVER-DONE Audit (14-gate sweep):**
+
+| Gate | Status | Detail |
+|------|--------|--------|
+| 0 Scheduler | ✅ | CooldownS=900, DB-verified |
+| 1 Build | N/A | Static HTML — no build step |
+| 2 Tests | N/A | No test framework |
+| 3 Vet/Lint | N/A | Single HTML file — no linter configured |
+| 4 Formatter | N/A | Single file, no formatter |
+| 5 TODOs/FIXMEs | ✅ | Zero TODOs/FIXMEs in cluster-estimator.html (grep-verified) |
+| 6 Hilo | N/A | Static HTML — no supported source files |
+| 7 GitReins | ✅ | 4 tasks (3 complete, 1 complete this tick), guard clean |
+| 8 DuckBrain | ✅ | 1 key, namespace active |
+| 9 CI | N/A | No GitHub Actions |
+| 10 Deps | N/A | Zero dependencies |
+| 11 Docs | 🔴 4/12 | 4 exist (README, LICENSE, .gitignore, AGENTS.md). 8 missing: SECURITY.md, CODEOWNERS, SUPPORT.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md, CHANGELOG.md, NOTICE, GOVERNANCE.md, TRADEMARK_POLICY.md. Gap persists 2 ticks — self-fix on Tick #3 if still present. |
+| 12 Middle-out | N/A | Not a Go project |
+| 13 E2E | N/A | Second tick |
+| 14 GitReins judge | ✅ | Evaluator configured: deepseek-v4-flash, 30 iter, 10m, 500k/100k. CE-004 judge: tier1 PASS. |
+
+**Task Scan:**
+- CE-004 ✅ dispatched this tick, worker completed (+80 lines, commit 35876a7)
+  - Added CLOUD_PRICING object (Lambda, RunPod, Vast.ai, CoreWeave)
+  - Added Cloud Pricing card with provider dropdown + price table
+  - Added Est. Cost/hr metric to Results card
+  - Wired into recalculate() + getConfig() for persistence
+- 17 tasks remain pending: CE-005, CE-006 (Phase 2), CE-007–CE-009 (Phase 3), CE-010–CE-012 (Phase 4), CE-013–CE-016 (Phase 5), CE-017–CE-021 (Phase 6)
+- CE-005 (cost-per-1M-tokens) ready for next productive tick
+
+**Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=partial (4/12), Cooldown=900s
