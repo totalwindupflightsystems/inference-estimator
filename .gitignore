@@ -1,1 +1,19 @@
 .gitreins/tasks.yaml
+
+# Hilo — local cache files (rebuildable)
+.vfs/graph/graph.db
+.vfs/graph/graph.db.wal
+.vfs/graph/graph.duckdb
+.vfs/graph/.last_warm
+
+# Foreman temp scripts
+.coding-hermes/
+!.coding-hermes/tasks.md
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Pytest
+.pytest_cache/
