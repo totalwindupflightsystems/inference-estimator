@@ -1,0 +1,27 @@
+# GitReins Configuration — Inference Cluster Estimator
+# Static HTML/JS project — no Go build, guard is secrets + HTML lint only
+
+guards:
+  go_tests:
+    enabled: false
+  go_lint:
+    enabled: false
+  go_build:
+    enabled: false
+  gofmt:
+    enabled: false
+  secrets:
+    enabled: true
+
+evaluator:
+  model: deepseek-v4-flash
+  max_iterations: 30
+  max_time: 10m
+  max_input_tokens: 500k
+  max_output_tokens: 100k
+  file_scope: changed
+  static_analysis_diagnostics: true
+
+tasks:
+  source: coding-hermes
+  path: .coding-hermes/tasks.md
