@@ -20,10 +20,10 @@
 - [x] **CE-008**: SGLang RadixAttention cache-aware scheduling impact — 8360dff
 - [x] **CE-009**: TGI continuous batching efficiency — 2031e08
 
-## Phase 4: Advanced Topology
-- [ ] **CE-010**: NVLink domain modeling (within-node bandwidth vs cross-node)
-- [ ] **CE-011**: Multi-node scaling efficiency curves (communication overhead)
-- [ ] **CE-012**: Expert placement for MoE (EP — expert parallelism)
+## Phase 4: Advanced Topology ✅ — completed 2026-07-30 tick 5
+- [x] **CE-010**: NVLink domain modeling (within-node bandwidth vs cross-node) — 2f5550d
+- [x] **CE-011**: Multi-node scaling efficiency curves (communication overhead) — cfc65f1
+- [x] **CE-012**: Expert placement for MoE (EP — expert parallelism) — c1657a9
 
 ## Phase 5: Throughput Modeling
 - [ ] **CE-013**: Prefill throughput (tokens/sec) separate from decode throughput
@@ -234,3 +234,64 @@
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s (DecayRate=0), Judge=PASS
 
 **Correction (second session — 20:14 UTC):** Phase 3 checkboxes fixed (CE-008/CE-009 were [ ] despite sibling commits 8360dff/2031e08). Phase 4 GitReins tasks CE-010/011/012 created. DuckBrain: 3 entries (tick/4 just added). HTML verified: 1025 lines, 259 balanced braces, all 76 JS element IDs match HTML ids. Guard PASS (secrets clean). 12 tasks remain (Phases 4-6).
+
+## Tick #5 — 2026-07-30 20:45 UTC — Phase 4 complete (CE-010, CE-011, CE-012)
+
+**Ground Truth:**
+- Scheduler: CooldownS=900, enabled=1, weight=10, priority=8, decay_rate=0.0, updated=2026-07-30T20:07:37Z (DB-verified)
+- DuckBrain: 3 keys across 2 prefix paths: /project/inference-estimator/ 1, /projects/inference-estimator/ 2
+- GitReins: 12 tasks (CE-001 through CE-012 complete), 0 pending
+- Workdir: Clean after 3 feature commits + board entry
+
+**NEVER-DONE Audit (14-gate sweep):**
+
+| Gate | Status | Detail |
+|------|--------|--------|
+| 0 Scheduler | ✅ | CooldownS=900, DecayRate=0.0, DB-verified |
+| 1 Build | N/A | Static HTML |
+| 2 Tests | N/A | No test framework |
+| 3 Vet/Lint | N/A | Single HTML file — guard config has go_lint disabled |
+| 4 Formatter | N/A | Single file |
+| 5 TODOs/FIXMEs | ✅ | Zero TODOs/FIXMEs (1352 lines) |
+| 6 Hilo | N/A | Static HTML |
+| 7 GitReins | ✅ | 12 complete, 0 pending, guard PASS |
+| 8 DuckBrain | ✅ | 3 keys across 2 prefix paths |
+| 9 CI | N/A | No GitHub Actions |
+| 10 Deps | N/A | Zero dependencies |
+| 11 Docs | ✅ | 9/9 — all community docs present |
+| 12 Middle-out | N/A | Not a Go project |
+| 13 E2E | ✅ | HTML: 1352 lines, 305/305 braces balanced, 0 duplicate IDs, all 9 feature constants present |
+| 14 GitReins judge | ⚠️ | CE-010/011/012 tier1 PASS, tier2 null (judge model returns null verdict for static HTML) |
+
+**Task Scan:**
+- CE-010 ✅ dispatched + completed (worker, commit 2f5550d, +327 lines)
+  - NVLink_TOPOLOGY: 4 interconnect profiles (NVLink 4.0 900GB/s, NVSwitch 1800GB/s, PCIe 5.0 128GB/s, InfiniBand NDR400 400GB/s)
+  - New Topology card: nvlinkTopo dropdown, intra-node BW slider (0-2000GB/s), inter-node BW slider (0-500GB/s), tpCrossNode/ppCrossNode selectors
+  - Bandwidth matrix: cross-node TP/PP penalty via bwRatio → logarithmic GPU adjustment factor
+  - Results: rNvlinkBwUtil, rCrossNodePenalty
+  - getConfig/setConfig: all 5 topology fields
+  - GitReins: tier1 PASS
+- CE-011 ✅ dispatched + completed (worker, commit cfc65f1, timed out at 600s but commit succeeded)
+  - SCALING_EFFICIENCY: ncclAllReduceBaseLatency=10us, ncclBwUtil=0.80, pipelineBubbleOverhead=15%, scalingEfficiencyCurve {1→128 nodes}
+  - New Multi-Node Scaling card: scalingModel (Ideal/NCCL-aware/Empirical), ncclAllReduceLatencyUs, ncclBwUtil slider, pipelineBubblePct
+  - NCCL all-reduce model: penalty = latency * tpSize / (ctxLen * batchSize / gpuBw)
+  - Pipeline bubble: bubblePct = (ppSize-1)/(ppSize*2) * pipelineBubbleOverhead
+  - Results: rScalingEfficiency, rMultiNodePenalty, rEffectiveTputWithScaling
+  - GitReins: tier1 PASS, task_complete applied post-timeout
+- CE-012 ✅ dispatched + completed (worker, commit c1657a9, +230 lines)
+  - MOE_EXPERT_CONFIG: numExperts=8, topK=2, allToAllOverhead=5%, loadBalancePenalty=10%
+  - New Expert Placement card (#expertCard): visible only when arch=moe
+  - EP fields: numExperts, topK, epSize (1/2/4/8), allToAllOverhead, loadBalancePenalty slider
+  - All-to-all dispatch overhead + load imbalance model
+  - Results: rEpEfficiency, rEpAdjustedGpus, rExpertsPerGpu, rMoEMemAdjustment
+  - getConfig/setConfig updated, updateArchFields wires show/hide
+  - GitReins: tier1 PASS
+- Phase 4 (Advanced Topology): COMPLETE ✅
+- Phase 5 (Throughput): CE-013, CE-014, CE-015, CE-016 — 4 tasks ready
+- Phase 6 (Polish): CE-017, CE-018, CE-019, CE-020, CE-021 — 5 tasks
+- 9 tasks remain across Phases 5-6
+
+**Foreman-direct fixes:**
+- Completed CE-011 GitReins task_complete (worker timed out at 600s after committing)
+
+**Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s, Judge=tier2-null (HTML project, no tests)
