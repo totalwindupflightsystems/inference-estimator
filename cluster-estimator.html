@@ -662,7 +662,11 @@ function recalculate() {
   const modelPerGpuGB = tensorMemGB / (tp * pp);
   const kvPerGpuGB = servingMode === 'disaggregated' ? kvEngineOverhead : kvEngineOverhead / tp;
 
-  const totalPerGpuGB = modelPerGpuGB * (1 + overhead) + kvPerGpuGB;
+  // CE-008: SGLang prefix cache competes with KV cache for VRAM
+  const prefixCachePerGpuGB = servingEngine === 'sglang'
+    ? sglangPrefixCacheSize / (servingMode === 'disaggregated' ? 1 : tp)
+    : 0;
+  const totalPerGpuGB = modelPerGpuGB * (1 + overhead) + kvPerGpuGB + prefixCachePerGpuGB;
   const gpusNeeded = Math.ceil(totalPerGpuGB / (gpu.vram * 0.90));
   const serversNeeded = Math.ceil(gpusNeeded / gpusPerServer);
 
@@ -682,6 +686,17 @@ function recalculate() {
   // CE-009: TGI continuous batching throughput multiplier applied on top
   if (servingEngine === 'tgi') {
     effectiveDecodeThroughput *= tgiBatchingMultiplier;
+  }
+  // CE-008: SGLang RadixAttention cache-aware scheduling
+  // Hit: throughput = base * 1.5 (50% reuse boost). Miss: throughput = base * (1 - overhead).
+  // Combined weighted: hit_rate * 1.5 + miss_rate * (1 - overhead)
+  let effectiveRadixThroughput = effectiveDecodeThroughput;
+  let radixMultiplier = 1.0;
+  if (servingEngine === 'sglang') {
+    const hitBoost = 1.5;
+    const missPenalty = 1.0 - sglangRadixTreeOverhead;
+    radixMultiplier = sglangCacheHitRate * hitBoost + (1.0 - sglangCacheHitRate) * missPenalty;
+    effectiveRadixThroughput = effectiveDecodeThroughput * radixMultiplier;
   }
   // KV waste comparison: show savings vs raw baseline
   const rawKvWaste = SERVING_OVERHEAD['raw'].kvWaste;
@@ -807,6 +822,17 @@ function recalculate() {
   document.getElementById('rKvWastePct').textContent = effectiveKvWaste === rawKvWaste ? '0% (baseline)' : (effectiveKvWaste * 100).toFixed(1) + '%';
   document.getElementById('rBatchEfficiency').textContent = batchEfficiencyPct.toFixed(0) + '%';
 
+  // CE-008: SGLang RadixAttention metrics
+  if (servingEngine === 'sglang') {
+    document.getElementById('rSglangRadixThroughput').textContent = effectiveRadixThroughput.toFixed(0) + ' tok/s';
+    const hitPct = (sglangCacheHitRate * 100).toFixed(0);
+    const missPct = ((1 - sglangCacheHitRate) * 100).toFixed(0);
+    document.getElementById('rSglangCacheNote').textContent = hitPct + '% hit / ' + missPct + '% miss';
+  } else {
+    document.getElementById('rSglangRadixThroughput').textContent = 'N/A';
+    document.getElementById('rSglangCacheNote').textContent = 'SGLang only';
+  }
+
   let notes = [];
   if (servingMode === 'disaggregated') {
     notes.push(`<strong>Disaggregated:</strong> Prefill GPUs need ${modelPerGpuGB.toFixed(1)}GB model + compute. Decode GPUs need ${kvPerGpuGB.toFixed(1)}GB KV cache + bandwidth.`);
@@ -826,6 +852,11 @@ function recalculate() {
   // CE-007 note
   const blockInfo = servingEngine === 'vllm' ? ` Paged attention blocks: ${vllmBlockSize} tok, block waste ${(blockWasteRate*100).toFixed(1)}%.` : '';
   notes.push(`<strong>CE-007 ${servingEngine.toUpperCase()}:</strong> KV waste ${(effectiveKvWaste*100).toFixed(0)}% (saves ${kvWasteSavingsPct.toFixed(1)}% vs raw), prefill ${(engineCfg.prefillEff*100).toFixed(0)}% eff, batch ${batchEfficiencyPct.toFixed(0)}% eff.` + blockInfo);
+  // CE-008: SGLang RadixAttention cache-aware scheduling notes
+  if (servingEngine === 'sglang') {
+    notes.push(`<strong>CE-008 RadixAttention:</strong> Cache hit rate ${(sglangCacheHitRate*100).toFixed(0)}%, combined radix throughput ${effectiveRadixThroughput.toFixed(0)} tok/s (×${radixMultiplier.toFixed(2)} vs base). Hit boost +50%, miss penalty −${(sglangRadixTreeOverhead*100).toFixed(0)}%.`);
+    notes.push(`<strong>CE-008 Prefix Cache VRAM:</strong> Prefix cache ${sglangPrefixCacheSize.toFixed(1)} GB competes with KV cache for GPU memory. Per-GPU radix tree: ${prefixCachePerGpuGB.toFixed(1)} GB. Tip: larger cache improves hit rate but reduces KV cache headroom.`);
+  }
   // CE-009: TGI continuous batching notes
   if (servingEngine === 'tgi') {
     const tgiBatchUtil = tgiMaxBatchSize > 0 ? (batchSize / tgiMaxBatchSize * 100).toFixed(0) : 0;
@@ -854,13 +885,15 @@ function recalculate() {
   updateCloudPricing();
   // CE-007: Show/hide vLLM-specific fields
   document.getElementById('vllmFields').style.display = servingEngine === 'vllm' ? '' : 'none';
+  // CE-008: Show/hide SGLang-specific fields
+  document.getElementById('sglangFields').style.display = servingEngine === 'sglang' ? '' : 'none';
   // CE-009: Show/hide TGI-specific fields
   document.getElementById('tgiFields').style.display = servingEngine === 'tgi' ? '' : 'none';
   // CE-007/CE-009: Update engine notes dynamically
   const engineNotesMap = {
     raw: 'Raw GPU — no serving engine overhead. KV waste ~30% (no paged attention).',
     vllm: `vLLM with paged attention — KV waste reduced to ~${((effectiveKvWaste-1)*100).toFixed(0)}%. Block size ${vllmBlockSize}.`,
-    sglang: 'SGLang with RadixAttention — KV waste ~10%. Prefix caching for shared prompts.',
+    sglang: `SGLang with RadixAttention (CE-008) — KV waste ~${(effectiveKvWaste*100).toFixed(0)}%. Prefix cache ${sglangPrefixCacheSize.toFixed(1)} GB, hit rate ${(sglangCacheHitRate*100).toFixed(0)}%. Radix multiplier ×${radixMultiplier.toFixed(2)}.`,
     tgi: `TGI continuous batching (CE-009) — KV waste ~${(engineCfg.kvWaste*100).toFixed(0)}%. Max batch ${tgiMaxBatchSize}, queue depth ${tgiQueueDepth.toFixed(1)}×. HuggingFace's production engine.`,
   };
   document.getElementById('engineNotes').textContent = engineNotesMap[servingEngine] || '';
@@ -903,6 +936,10 @@ function getConfig() {
     tgiMaxBatchSize: document.getElementById('tgiMaxBatchSize').value,
     tgiMaxWaitingSeqs: document.getElementById('tgiMaxWaitingSeqs').value,
     tgiMaxTotalTokens: document.getElementById('tgiMaxTotalTokens').value,
+    // CE-008: SGLang RadixAttention config
+    sglangCacheHitRate: document.getElementById('sglangCacheHitRate').value,
+    sglangPrefixCacheSize: document.getElementById('sglangPrefixCacheSize').value,
+    sglangRadixTreeOverhead: document.getElementById('sglangRadixTreeOverhead').value,
   };
 }
 
@@ -918,6 +955,7 @@ function setConfig(cfg) {
   document.getElementById('serverLabel').textContent = cfg.numServers || 1;
   document.getElementById('quantLabel').textContent = document.getElementById('quant').selectedOptions[0]?.text || '';
   document.getElementById('archLabel').textContent = (cfg.arch || 'dense') === 'moe' ? 'MoE' : 'Dense';
+  document.getElementById('sglangHitLabel').textContent = parseFloat(cfg.sglangCacheHitRate || 0.5).toFixed(2);
   recalculate();
 }
 
