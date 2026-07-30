@@ -233,12 +233,12 @@
         </div>
         <div class="field">
           <label>Max Batched Tokens</label>
-          <input type="number" id="vllmMaxNumBatchedTokens" value="8192" min="256" max="65536">
+          <input type="number" id="vllmMaxNumBatchedTokens" value="8192" min="256" max="65536" onchange="recalculate()">
         </div>
       </div>
       <div class="field">
         <label>Max Sequences</label>
-        <input type="number" id="vllmMaxNumSeqs" value="256" min="1" max="1024">
+        <input type="number" id="vllmMaxNumSeqs" value="256" min="1" max="1024" onchange="recalculate()">
       </div>
     </div>
     <div class="notes" id="engineNotes">vLLM with paged attention — KV waste reduced from 30% to 15% vs raw</div>
@@ -550,6 +550,23 @@ function recalculate() {
   const vllmMaxNumBatchedTokens = parseInt(document.getElementById('vllmMaxNumBatchedTokens').value) || 8192;
   const vllmMaxNumSeqs = parseInt(document.getElementById('vllmMaxNumSeqs').value) || 256;
 
+  // CE-007: vLLM block size affects KV waste — larger blocks = less fragmentation
+  let effectiveKvWaste = engineCfg.kvWaste;
+  if (servingEngine === 'vllm') {
+    effectiveKvWaste = vllmBlockSize === 32 ? 1.08 : 1.15;
+  }
+
+  // CE-007: Adjust batch efficiency based on vLLM scheduling limits
+  let effectiveBatchEff = engineCfg.batchEff;
+  if (servingEngine === 'vllm') {
+    const avgTokensPerReq = ctxLen * 0.3;
+    const totalBatchedTokens = batchSize * avgTokensPerReq;
+    const tokenHeadroom = vllmMaxNumBatchedTokens > 0 ? Math.min(1, totalBatchedTokens / vllmMaxNumBatchedTokens) : 1;
+    const seqHeadroom = vllmMaxNumSeqs > 0 ? Math.min(1, batchSize / vllmMaxNumSeqs) : 1;
+    const constraintFactor = (tokenHeadroom + seqHeadroom) / 2;
+    effectiveBatchEff = 1.0 - (1.0 - engineCfg.batchEff) * constraintFactor;
+  }
+
   const totalGpus = gpusPerServer * numServers;
   const effectiveParallel = Math.ceil(totalGpus / (tp * pp));
 
@@ -559,9 +576,8 @@ function recalculate() {
 
   const kvPerTokenBytes = 2 * nLayers * nKvHeads * headDim * (kvBpw / 8);
   const kvCacheGB = (kvPerTokenBytes * ctxLen * batchSize) / 1e9;
-  const kvWithOverhead = kvCacheGB * (1 + overhead);
-  // CE-007: Apply serving engine KV waste (paged attention reduces fragmentation)
-  const kvEngineOverhead = kvWithOverhead * engineCfg.kvWaste;
+  // CE-007: KV cache overhead from serving engine only (generic overhead slider = model weights only)
+  const kvEngineOverhead = kvCacheGB * effectiveKvWaste;
 
   const tensorMemGB = paramsB * (quantBpw / 8); // full model for TP splitting
   const modelPerGpuGB = tensorMemGB / (tp * pp);
@@ -583,16 +599,16 @@ function recalculate() {
 
   // CE-007: Apply serving engine overhead to throughput
   // batchEff < 1.0 means continuous batching improves effective throughput
-  const effectiveDecodeThroughput = memBwTokensPerSec / engineCfg.batchEff;
+  const effectiveDecodeThroughput = memBwTokensPerSec / effectiveBatchEff;
   // KV waste comparison: show savings vs raw baseline
   const rawKvWaste = SERVING_OVERHEAD['raw'].kvWaste;
-  const kvWasteSavingsPct = ((rawKvWaste - engineCfg.kvWaste) / rawKvWaste) * 100;
+  const kvWasteSavingsPct = ((rawKvWaste - effectiveKvWaste) / rawKvWaste) * 100;
   // vLLM paged attention block waste calculation
   const avgSeqLen = batchSize > 0 ? ctxLen / batchSize : ctxLen;
   const leftoverTokens = avgSeqLen % vllmBlockSize;
   const blockWasteRate = leftoverTokens > 0 ? (vllmBlockSize - leftoverTokens) / vllmBlockSize : 0;
   // Effective batch throughput improvement (batchEff < 1 = more efficient)
-  const batchEfficiencyPct = (1.0 / engineCfg.batchEff) * 100;
+  const batchEfficiencyPct = (1.0 / effectiveBatchEff) * 100;
 
   const tokensPerDollar = (effectiveDecodeThroughput * 3600) / gpu.price_hour;
   const tokDollarFormatted = tokensPerDollar > 1e6
@@ -705,7 +721,7 @@ function recalculate() {
 
   // CE-007: Engine overhead metrics
   document.getElementById('rEffectiveThroughput').textContent = effectiveDecodeThroughput.toFixed(0) + ' tok/s';
-  document.getElementById('rKvWastePct').textContent = engineCfg.kvWaste === rawKvWaste ? '0% (baseline)' : (engineCfg.kvWaste * 100).toFixed(1) + '%';
+  document.getElementById('rKvWastePct').textContent = effectiveKvWaste === rawKvWaste ? '0% (baseline)' : (effectiveKvWaste * 100).toFixed(1) + '%';
   document.getElementById('rBatchEfficiency').textContent = batchEfficiencyPct.toFixed(0) + '%';
 
   let notes = [];
@@ -725,11 +741,22 @@ function recalculate() {
     notes.push(`<strong>CE-006 Breakeven:</strong> At 50% utilization ($${monthlyGpuCost.toFixed(0)}/mo GPU cost), need ${breakevenTokensPerMonth >= 1e9 ? (breakevenTokensPerMonth/1e9).toFixed(1)+'B' : (breakevenTokensPerMonth/1e6).toFixed(1)+'M'} output tok/mo to beat ${apiProvider} API pricing ($${apiOutputCost.toFixed(2)}/1M output).`);
   }
   // CE-007 note
-  notes.push(`<strong>CE-007 ${servingEngine.toUpperCase()}:</strong> KV waste ${(engineCfg.kvWaste*100).toFixed(0)}% (saves ${kvWasteSavingsPct.toFixed(1)}% vs raw), prefill ${(engineCfg.prefillEff*100).toFixed(0)}% eff, batch ${batchEfficiencyPct.toFixed(0)}% eff. Paged attention blocks: ${vllmBlockSize} tok, block waste ${(blockWasteRate*100).toFixed(1)}%.`);
+  const blockInfo = servingEngine === 'vllm' ? ` Paged attention blocks: ${vllmBlockSize} tok, block waste ${(blockWasteRate*100).toFixed(1)}%.` : '';
+  notes.push(`<strong>CE-007 ${servingEngine.toUpperCase()}:</strong> KV waste ${(effectiveKvWaste*100).toFixed(0)}% (saves ${kvWasteSavingsPct.toFixed(1)}% vs raw), prefill ${(engineCfg.prefillEff*100).toFixed(0)}% eff, batch ${batchEfficiencyPct.toFixed(0)}% eff.` + blockInfo);
   document.getElementById('notes').innerHTML = notes.join('<br>');
 
   updateArchFields();
   updateCloudPricing();
+  // CE-007: Show/hide vLLM-specific fields
+  document.getElementById('vllmFields').style.display = servingEngine === 'vllm' ? '' : 'none';
+  // CE-007: Update engine notes dynamically
+  const engineNotesMap = {
+    raw: 'Raw GPU — no serving engine overhead. KV waste ~30% (no paged attention).',
+    vllm: `vLLM with paged attention — KV waste reduced to ~${((effectiveKvWaste-1)*100).toFixed(0)}%. Block size ${vllmBlockSize}.`,
+    sglang: 'SGLang with RadixAttention — KV waste ~10%. Prefix caching for shared prompts.',
+    tgi: 'TGI continuous batching — KV waste ~20%. HuggingFace\'s production serving engine.',
+  };
+  document.getElementById('engineNotes').textContent = engineNotesMap[servingEngine] || '';
 }
 
 function updateArchFields() {
