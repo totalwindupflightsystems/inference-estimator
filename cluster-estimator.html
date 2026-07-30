@@ -811,7 +811,8 @@ function recalculate() {
     if (crossNodeTP) {
       // Communication overhead per token: all-reduce latency scaled by TP factor
       // normalized by compute time per token
-      const computeTimePerToken = (effParams * (quantBpw / 8) * 1e9) / (gpu.bw * 1e9 * tp);
+      const ce011EffParams = arch === 'moe' ? activeB : paramsB;
+      const computeTimePerToken = (ce011EffParams * (quantBpw / 8) * 1e9) / (gpu.bw * 1e9 * tp);
       const commTimePerAllReduce = ncclAllReduceLatencyUs * 1e-6; // seconds
       const numAllReduces = nLayers * 2; // 2 all-reduces per transformer layer
       const totalCommTime = commTimePerAllReduce * numAllReduces * (tp / tpGpusPerServer); // scaled by cross-node ratio
