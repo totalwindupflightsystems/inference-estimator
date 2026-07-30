@@ -38,6 +38,24 @@
   .status { font-size: 0.75rem; color: var(--accent2); margin-left: 12px; opacity: 0; transition: opacity 0.3s; }
   .status.show { opacity: 1; }
   hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  /* CE-006: API pricing comparison table */
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin-top: 12px; }
+  .compare-table th, .compare-table td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .compare-table th { color: var(--text-dim); font-weight: 600; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.3px; }
+  .compare-table td { color: var(--text); }
+  .compare-table .api-cost { color: var(--accent); }
+  .compare-table .self-cost { color: var(--accent2); }
+  .compare-table .breakeven-val { color: var(--warn); font-weight: 700; }
+  .compare-table .na { color: var(--text-dim); font-style: italic; }
+  .api-model-list { max-height: 320px; overflow-y: auto; font-size: 0.75rem; margin-top: 8px; }
+  .api-model-row { display: flex; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .api-model-row:hover { background: var(--bg); }
+  .api-model-row .model-name { color: var(--text); flex: 1; }
+  .api-model-row .model-price { color: var(--text-dim); text-align: right; min-width: 120px; }
+  .api-model-row .model-price .in { color: var(--accent); }
+  .api-model-row .model-price .out { color: var(--accent2); }
+  .api-model-row.active { background: var(--bg); border-left: 2px solid var(--accent); }
+  .api-model-row.active .model-name { color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -209,6 +227,33 @@
       <div style="font-size:1.3rem;font-weight:700;color:var(--accent2)" id="rCloudCost">—</div>
     </div>
   </div>
+
+  <!-- CE-006: API Pricing Card -->
+  <div class="card">
+    <h2>API Pricing (CE-006)</h2>
+    <div class="field">
+      <label>API Provider</label>
+      <select id="apiProvider" onchange="recalculate()">
+        <option value="openrouter">OpenRouter</option>
+        <option value="together">Together AI</option>
+        <option value="fireworks">Fireworks AI</option>
+      </select>
+    </div>
+    <div class="api-model-list" id="apiModelList"></div>
+    <div style="margin-top:12px">
+      <label style="font-size:0.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px">Comparison — Selected Model</label>
+      <table class="compare-table" id="compareTable">
+        <thead>
+          <tr><th>Metric</th><th>Self-Hosted</th><th>API</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Input ($/1M tok)</td><td class="self-cost" id="cmpSelfInput">—</td><td class="api-cost" id="cmpApiInput">—</td></tr>
+          <tr><td>Output ($/1M tok)</td><td class="self-cost" id="cmpSelfOutput">—</td><td class="api-cost" id="cmpApiOutput">—</td></tr>
+          <tr><td>Breakeven (tok/mo)</td><td colspan="2" class="breakeven-val" id="cmpBreakeven" style="text-align:center">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <div class="card" style="margin-bottom:24px">
@@ -226,6 +271,11 @@
     <div class="metric"><div class="value" id="rTokensPerDollar">—</div><div class="label">Est. tok/$ (decode)</div></div>
     <div class="metric"><div class="value" id="rCostPerHour">—</div><div class="label">Est. Cost/hr</div></div>
     <div class="metric"><div class="value" id="rSweetSpot">—</div><div class="label">Sweet Spot</div></div>
+    <!-- CE-005: Cost-per-1M-tokens metrics -->
+    <div class="metric"><div class="value" id="rCostInput">—</div><div class="label">Input Cost $/1M tok (CE-005)</div></div>
+    <div class="metric"><div class="value" id="rCostOutput">—</div><div class="label">Output Cost $/1M tok (CE-005)</div></div>
+    <!-- CE-006: Breakeven metric -->
+    <div class="metric"><div class="value" id="rBreakeven">—</div><div class="label">Breakeven tok/mo (CE-006)</div></div>
   </div>
   <div class="notes" id="notes" style="margin-top:16px"></div>
 </div>
@@ -273,6 +323,43 @@ const CLOUD_PRICING = {
   },
 };
 
+// CE-006: API pricing per provider per model (USD per 1M tokens, input/output)
+const API_PRICING = {
+  'openrouter': {
+    'llama-3-70b':      { input: 0.59, output: 0.79 },
+    'llama-4-400b-moe': { input: 2.50, output: 4.00 },
+    'deepseek-v3':       { input: 0.27, output: 1.10 },
+    'deepseek-v4':       { input: 0.35, output: 1.40 },
+    'mixtral-8x22b':     { input: 0.65, output: 0.65 },
+    'qwen-2.5-72b':      { input: 0.35, output: 0.40 },
+    'minimax-m3-moe':    { input: 0.50, output: 1.20 },
+    'gemma-3-27b':       { input: 0.15, output: 0.20 },
+    'mistral-large-2':   { input: 2.00, output: 6.00 },
+  },
+  'together': {
+    'llama-3-70b':      { input: 0.59, output: 0.79 },
+    'llama-4-400b-moe': { input: 2.20, output: 3.60 },
+    'deepseek-v3':       { input: 1.25, output: 1.25 },
+    'deepseek-v4':       { input: 1.50, output: 1.50 },
+    'mixtral-8x22b':     { input: 0.90, output: 0.90 },
+    'qwen-2.5-72b':      { input: 0.90, output: 0.90 },
+    'minimax-m3-moe':    { input: 0.40, output: 1.00 },
+    'gemma-3-27b':       { input: 0.10, output: 0.10 },
+    'mistral-large-2':   { input: 2.00, output: 6.00 },
+  },
+  'fireworks': {
+    'llama-3-70b':      { input: 0.59, output: 0.79 },
+    'llama-4-400b-moe': { input: 1.80, output: 2.80 },
+    'deepseek-v3':       { input: 0.90, output: 0.90 },
+    'deepseek-v4':       { input: 1.10, output: 1.10 },
+    'mixtral-8x22b':     { input: 0.50, output: 0.50 },
+    'qwen-2.5-72b':      { input: 0.90, output: 0.90 },
+    'minimax-m3-moe':    { input: null, output: null },
+    'gemma-3-27b':       { input: 0.15, output: 0.20 },
+    'mistral-large-2':   { input: 1.50, output: 4.50 },
+  },
+};
+
 const MODEL_PRESETS = {
   'llama-3-70b':      { name: 'Llama 3 70B',       params: 70,  arch: 'dense', nLayers: 80,  nKvHeads: 8, headDim: 128, hiddenSize: 8192,  desc: 'Meta Llama 3 — 70B dense, 80 layers, GQA (8 KV heads), 128 head dim' },
   'llama-4-400b-moe':  { name: 'Llama 4 400B (MoE)', params: 400, arch: 'moe',  activeParams: 40,   nLayers: 126, nKvHeads: 8, headDim: 128, hiddenSize: 16384, desc: 'Meta Llama 4 Behemoth — 400B total, ~40B active, 16 experts, 126 layers' },
@@ -313,6 +400,34 @@ function updateCloudPricing() {
     html += `<span style="${highlight}">  ${gpuName}: ${priceStr}</span><br>`;
   }
   document.getElementById('cloudPriceTable').innerHTML = html;
+}
+
+// CE-006: Render API pricing model list for selected provider
+function updateApiModelList() {
+  const provider = document.getElementById('apiProvider').value;
+  const pricing = API_PRICING[provider];
+  const presetKey = document.getElementById('modelPreset').value;
+  if (!pricing) return;
+
+  let html = '';
+  for (const [key, p] of Object.entries(MODEL_PRESETS)) {
+    const apiPrice = pricing[key];
+    const activeClass = key === presetKey ? ' active' : '';
+    if (apiPrice) {
+      const inStr = apiPrice.input !== null ? '$' + apiPrice.input.toFixed(2) : 'N/A';
+      const outStr = apiPrice.output !== null ? '$' + apiPrice.output.toFixed(2) : 'N/A';
+      html += `<div class="api-model-row${activeClass}">
+        <span class="model-name">${p.name}</span>
+        <span class="model-price"><span class="in">in: ${inStr}</span> / <span class="out">out: ${outStr}</span> /1M</span>
+      </div>`;
+    } else {
+      html += `<div class="api-model-row${activeClass}">
+        <span class="model-name">${p.name}</span>
+        <span class="model-price" style="color:var(--text-dim)">not listed</span>
+      </div>`;
+    }
+  }
+  document.getElementById('apiModelList').innerHTML = html;
 }
 
 function filterPresets() {
@@ -405,23 +520,53 @@ function recalculate() {
   let utilClass = gpuUtil < 80 ? 'ok' : gpuUtil > 95 ? 'bad' : 'warn';
 
   const totalClusterVram = totalGpus * gpu.vram;
-  const totalModelAcrossCluster = modelMemGB * (1 + overhead) * effectiveParallel;
-  const totalKvAcrossCluster = kvWithOverhead * effectiveParallel;
-  const clusterUtil = servingMode === 'disaggregated' 
-    ? ((totalPerGpuGB * gpusNeeded) / totalClusterVram) * 100
-    : ((modelPerGpuGB * (1 + overhead) + kvPerGpuGB) * gpusPerServer * numServers / totalClusterVram) * 100;
+  const sysRamGB = modelMemGB * 2;
+  const nvmeGB = modelMemGB * 3;
 
-  const sysRamGB = modelMemGB * 2; // rule of thumb: 2x model for system RAM
-  const nvmeGB = modelMemGB * 3;   // rule of thumb: enough to hold model + cache spillover
-
+  // Memory-bandwidth-bound decode throughput (tokens/sec per GPU)
   const memBwTokensPerSec = gpu.bw * 1e9 / (effParams * 1e9 * (quantBpw / 8) / tp);
   const tokensPerDollar = (memBwTokensPerSec * 3600) / gpu.price_hour;
-  const tokDollarFormatted = tokensPerDollar > 1e6 
+  const tokDollarFormatted = tokensPerDollar > 1e6
     ? (tokensPerDollar/1e6).toFixed(1) + 'M'
-    : tokensPerDollar > 1e3 
+    : tokensPerDollar > 1e3
       ? (tokensPerDollar/1e3).toFixed(1) + 'K'
       : tokensPerDollar.toFixed(0);
 
+  // Cloud pricing cost estimate
+  const provider = document.getElementById('cloudProvider').value;
+  const gpuKey = document.getElementById('gpuModel').value === 'custom' ? null : document.getElementById('gpuModel').value;
+  const cloudPricePerGpu = (gpuKey && CLOUD_PRICING[provider] && CLOUD_PRICING[provider].gpus[gpuKey] !== null && CLOUD_PRICING[provider].gpus[gpuKey] !== undefined)
+    ? CLOUD_PRICING[provider].gpus[gpuKey]
+    : gpu.price_hour;
+  const clusterCostPerHour = cloudPricePerGpu * gpusNeeded;
+
+  // CE-005: Cost-per-1M-tokens calculations
+  // Prefill is compute-bound (~50% of memory BW efficiency for compute)
+  const prefillTokensPerSec = (gpu.bw * 1e9) / (effParams * 1e9 * (quantBpw / 8) / tp) * 0.5;
+  // cost_per_1M_input = (1M tokens / prefill_tok_per_sec / 3600 sec/hr) * price_per_gpu * gpus
+  const costPer1MInput = prefillTokensPerSec > 0
+    ? ((1_000_000 / prefillTokensPerSec / 3600) * cloudPricePerGpu * gpusNeeded)
+    : 0;
+  // cost_per_1M_output = (1M tokens / decode_tok_per_sec / 3600 sec/hr) * price_per_gpu * gpus
+  const costPer1MOutput = memBwTokensPerSec > 0
+    ? ((1_000_000 / memBwTokensPerSec / 3600) * cloudPricePerGpu * gpusNeeded)
+    : 0;
+
+  // CE-006: Breakeven analysis
+  // monthly_gpu_cost at 50% utilization (multiply by 2 for idle time)
+  const monthlyGpuCost = cloudPricePerGpu * gpusNeeded * 730 * 2;
+  const apiProvider = document.getElementById('apiProvider').value;
+  const presetKey = document.getElementById('modelPreset').value;
+  const apiPrices = presetKey && API_PRICING[apiProvider] ? API_PRICING[apiProvider][presetKey] : null;
+  const apiOutputCost = apiPrices && apiPrices.output !== null ? apiPrices.output : null;
+  const apiInputCost = apiPrices && apiPrices.input !== null ? apiPrices.input : null;
+  // breakeven: tokens/month needed to match API output cost
+  let breakevenTokensPerMonth = null;
+  if (apiOutputCost && apiOutputCost > 0) {
+    breakevenTokensPerMonth = monthlyGpuCost / (apiOutputCost / 1_000_000);
+  }
+
+  // --- Update Results ---
   document.getElementById('rModelMem').textContent = modelWithOverhead.toFixed(1);
   document.getElementById('rKvCache').textContent = kvWithOverhead.toFixed(2);
   document.getElementById('rTotalPerGpu').textContent = totalPerGpuGB.toFixed(1);
@@ -433,16 +578,27 @@ function recalculate() {
   document.getElementById('rSysRam').textContent = sysRamGB.toFixed(0);
   document.getElementById('rNvme').textContent = nvmeGB.toFixed(0);
   document.getElementById('rTokensPerDollar').textContent = tokDollarFormatted;
-
-  // Cloud pricing cost estimate
-  const provider = document.getElementById('cloudProvider').value;
-  const gpuKey = document.getElementById('gpuModel').value === 'custom' ? null : document.getElementById('gpuModel').value;
-  const cloudPrice = (gpuKey && CLOUD_PRICING[provider] && CLOUD_PRICING[provider].gpus[gpuKey] !== null && CLOUD_PRICING[provider].gpus[gpuKey] !== undefined)
-    ? CLOUD_PRICING[provider].gpus[gpuKey]
-    : gpu.price_hour;
-  const clusterCostPerHour = cloudPrice * gpusNeeded;
   document.getElementById('rCostPerHour').textContent = '$' + clusterCostPerHour.toFixed(2) + '/hr';
   document.getElementById('rCloudCost').textContent = '$' + clusterCostPerHour.toFixed(2) + '/hr';
+
+  // CE-005: Cost per 1M tokens
+  document.getElementById('rCostInput').textContent = '$' + costPer1MInput.toFixed(2) + '/1M tok';
+  document.getElementById('rCostOutput').textContent = '$' + costPer1MOutput.toFixed(2) + '/1M tok';
+
+  // CE-006: Breakeven
+  if (breakevenTokensPerMonth !== null) {
+    let breakevenFormatted;
+    if (breakevenTokensPerMonth >= 1e9) {
+      breakevenFormatted = (breakevenTokensPerMonth / 1e9).toFixed(1) + 'B';
+    } else if (breakevenTokensPerMonth >= 1e6) {
+      breakevenFormatted = (breakevenTokensPerMonth / 1e6).toFixed(1) + 'M';
+    } else {
+      breakevenFormatted = breakevenTokensPerMonth.toFixed(0);
+    }
+    document.getElementById('rBreakeven').textContent = breakevenFormatted;
+  } else {
+    document.getElementById('rBreakeven').textContent = 'N/A';
+  }
 
   let sweetSpot = '';
   if (gpusNeeded <= totalGpus) {
@@ -454,6 +610,28 @@ function recalculate() {
   }
   document.getElementById('rSweetSpot').textContent = sweetSpot;
 
+  // CE-006: Update comparison table
+  document.getElementById('cmpSelfInput').textContent = '$' + costPer1MInput.toFixed(2) + '/1M';
+  document.getElementById('cmpSelfOutput').textContent = '$' + costPer1MOutput.toFixed(2) + '/1M';
+  document.getElementById('cmpApiInput').textContent = apiInputCost !== null ? '$' + apiInputCost.toFixed(2) + '/1M' : 'N/A';
+  document.getElementById('cmpApiOutput').textContent = apiOutputCost !== null ? '$' + apiOutputCost.toFixed(2) + '/1M' : 'N/A';
+  if (breakevenTokensPerMonth !== null) {
+    let breakevenFormatted;
+    if (breakevenTokensPerMonth >= 1e9) {
+      breakevenFormatted = (breakevenTokensPerMonth / 1e9).toFixed(2) + 'B tok/mo';
+    } else if (breakevenTokensPerMonth >= 1e6) {
+      breakevenFormatted = (breakevenTokensPerMonth / 1e6).toFixed(2) + 'M tok/mo';
+    } else {
+      breakevenFormatted = breakevenTokensPerMonth.toFixed(0) + ' tok/mo';
+    }
+    document.getElementById('cmpBreakeven').textContent = breakevenFormatted + ' (50% util)';
+  } else {
+    document.getElementById('cmpBreakeven').textContent = 'Select model preset';
+  }
+
+  // Update API model list highlighting
+  updateApiModelList();
+
   let notes = [];
   if (servingMode === 'disaggregated') {
     notes.push(`<strong>Disaggregated:</strong> Prefill GPUs need ${modelPerGpuGB.toFixed(1)}GB model + compute. Decode GPUs need ${kvPerGpuGB.toFixed(1)}GB KV cache + bandwidth.`);
@@ -464,6 +642,12 @@ function recalculate() {
   if (tp > 1) notes.push(`<strong>TP=${tp}:</strong> Model sharded across ${tp} GPUs. Per-GPU model: ${modelPerGpuGB.toFixed(1)} GB.`);
   if (ctxLen > 131072) notes.push(`<strong>Long context:</strong> KV cache dominates at ${kvWithOverhead.toFixed(0)} GB. Consider FP8 KV cache precision.`);
   notes.push(`<strong>Memory BW limit:</strong> ~${memBwTokensPerSec.toFixed(0)} tok/s decode per GPU at this quant.`);
+  // CE-005 note
+  notes.push(`<strong>CE-005 Costs:</strong> Input $${costPer1MInput.toFixed(2)}/1M tok (prefill ~${prefillTokensPerSec.toFixed(0)} tok/s), Output $${costPer1MOutput.toFixed(2)}/1M tok (decode ~${memBwTokensPerSec.toFixed(0)} tok/s). Assumes 100% utilization.`);
+  // CE-006 note
+  if (apiOutputCost !== null) {
+    notes.push(`<strong>CE-006 Breakeven:</strong> At 50% utilization ($${monthlyGpuCost.toFixed(0)}/mo GPU cost), need ${breakevenTokensPerMonth >= 1e9 ? (breakevenTokensPerMonth/1e9).toFixed(1)+'B' : (breakevenTokensPerMonth/1e6).toFixed(1)+'M'} output tok/mo to beat ${apiProvider} API pricing ($${apiOutputCost.toFixed(2)}/1M output).`);
+  }
   document.getElementById('notes').innerHTML = notes.join('<br>');
 
   updateArchFields();
@@ -497,6 +681,7 @@ function getConfig() {
     tpSize: document.getElementById('tpSize').value,
     ppSize: document.getElementById('ppSize').value,
     cloudProvider: document.getElementById('cloudProvider').value,
+    apiProvider: document.getElementById('apiProvider').value,
   };
 }
 

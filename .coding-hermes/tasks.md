@@ -10,10 +10,10 @@
   - All 9 models: Llama-3-70B, Llama-4-400B-MoE, DeepSeek-V3, DeepSeek-V4, Mixtral-8x22B, Qwen2.5-72B, **MiniMax-M3-MoE**, Gemma-3-27B, Mistral-Large-2
 - [x] **CE-003**: Preset descriptions — show model card summary on hover/select
 
-## Phase 2: Pricing
-- [ ] **CE-004**: Add cloud GPU pricing data (Lambda, RunPod, Vast.ai, CoreWeave representative prices)
-- [ ] **CE-005**: Cost-per-1M-tokens estimate (input/output split)
-- [ ] **CE-006**: Breakeven analysis: self-hosted vs API (OpenRouter, Together, Fireworks)
+## Phase 2: Pricing ✅ — completed 2026-07-30 tick 2
+- [x] **CE-004**: Add cloud GPU pricing data (Lambda, RunPod, Vast.ai, CoreWeave representative prices) — 35876a7
+- [x] **CE-005**: Cost-per-1M-tokens estimate (input/output split) — worker completed, +185 lines
+- [x] **CE-006**: Breakeven analysis: self-hosted vs API (OpenRouter, Together, Fireworks) — worker completed, +203 lines total
 
 ## Phase 3: Serving Engine Models
 - [ ] **CE-007**: vLLM overhead model (paged attention, prefill batching behavior)
@@ -118,7 +118,15 @@
   - Added Cloud Pricing card with provider dropdown + price table
   - Added Est. Cost/hr metric to Results card
   - Wired into recalculate() + getConfig() for persistence
-- 17 tasks remain pending: CE-005, CE-006 (Phase 2), CE-007–CE-009 (Phase 3), CE-010–CE-012 (Phase 4), CE-013–CE-016 (Phase 5), CE-017–CE-021 (Phase 6)
-- CE-005 (cost-per-1M-tokens) ready for next productive tick
+- CE-005 ✅ foreman-dispatched worker, completed (+185 lines HTML, 766 total)
+  - Cost-per-1M-tokens for input (prefill) and output (decode)
+  - New Results metrics: rCostInput, rCostOutput
+- CE-006 ✅ foreman-dispatched worker, completed same pass (+203 lines total)
+  - API_PRICING object (OpenRouter, Together, Fireworks) for all 9 models
+  - API Pricing card with provider dropdown + comparison table
+  - Breakeven metric: rBreakeven (tokens/month at 50% utilization)
+  - GitReins verdict: PASS (CE-005, CE-006)
+- 15 tasks remain: CE-007–CE-009 (Phase 3), CE-010–CE-012 (Phase 4), CE-013–CE-016 (Phase 5), CE-017–CE-021 (Phase 6)
+- CE-007 (vLLM overhead model) ready for next productive tick
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=partial (4/12), Cooldown=900s
