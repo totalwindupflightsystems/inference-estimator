@@ -191,6 +191,24 @@
       <input type="number" id="ppSize" value="1" min="1" max="8">
     </div>
   </div>
+
+  <div class="card">
+    <h2>Cloud Pricing</h2>
+    <div class="field">
+      <label>Provider</label>
+      <select id="cloudProvider" onchange="updateCloudPricing()">
+        <option value="Lambda">Lambda Labs</option>
+        <option value="RunPod">RunPod</option>
+        <option value="Vast.ai">Vast.ai</option>
+        <option value="CoreWeave">CoreWeave</option>
+      </select>
+    </div>
+    <div id="cloudPriceTable" class="notes" style="margin-top:0"></div>
+    <div class="field" style="margin-top:12px">
+      <label>Cluster Cost Estimate</label>
+      <div style="font-size:1.3rem;font-weight:700;color:var(--accent2)" id="rCloudCost">—</div>
+    </div>
+  </div>
 </div>
 
 <div class="card" style="margin-bottom:24px">
@@ -206,6 +224,7 @@
     <div class="metric"><div class="value" id="rSysRam">—</div><div class="label">System RAM (GB)</div></div>
     <div class="metric"><div class="value" id="rNvme">—</div><div class="label">NVMe Cache (GB)</div></div>
     <div class="metric"><div class="value" id="rTokensPerDollar">—</div><div class="label">Est. tok/$ (decode)</div></div>
+    <div class="metric"><div class="value" id="rCostPerHour">—</div><div class="label">Est. Cost/hr</div></div>
     <div class="metric"><div class="value" id="rSweetSpot">—</div><div class="label">Sweet Spot</div></div>
   </div>
   <div class="notes" id="notes" style="margin-top:16px"></div>
@@ -221,6 +240,37 @@ const GPU_SPECS = {
   'L40S-48':   { vram: 48,  bw: 864,  name: 'L40S 48GB', price_hour: 1.10 },
   'MI300X-192':{ vram: 192, bw: 5300, name: 'MI300X 192GB', price_hour: 3.00 },
   'RTX6000-48':{ vram: 48,  bw: 960,  name: 'RTX 6000 Ada 48GB', price_hour: 0.80 },
+};
+
+const CLOUD_PRICING = {
+  'Lambda': {
+    name: 'Lambda Labs', url: 'https://lambdalabs.com/service/gpu-cloud',
+    gpus: {
+      'H100-80':  2.49, 'H200-141': 3.29, 'B200-192': 3.99,
+      'A100-80':  1.89, 'A100-40':  1.29,
+    },
+  },
+  'RunPod': {
+    name: 'RunPod', url: 'https://www.runpod.io/console/gpu-cloud',
+    gpus: {
+      'H100-80':  2.49, 'H200-141': 3.49,
+      'A100-80':  1.89, 'A100-40':  1.29,
+    },
+  },
+  'Vast.ai': {
+    name: 'Vast.ai', url: 'https://vast.ai',
+    gpus: {
+      'H100-80':  2.40, 'H200-141': null,
+      'A100-80':  1.55, 'A100-40':  1.00,
+    },
+  },
+  'CoreWeave': {
+    name: 'CoreWeave', url: 'https://www.coreweave.com/pricing',
+    gpus: {
+      'H100-80':  2.21, 'H200-141': null,
+      'A100-80':  1.67, 'A100-40':  null,
+    },
+  },
 };
 
 const MODEL_PRESETS = {
@@ -244,7 +294,25 @@ function getGpuSpec() {
 function updateGpuSpecs() {
   const sel = document.getElementById('gpuModel').value;
   document.getElementById('customVramField').style.display = sel === 'custom' ? '' : 'none';
+  updateCloudPricing();
   recalculate();
+}
+
+function updateCloudPricing() {
+  const provider = document.getElementById('cloudProvider').value;
+  const selGpu = document.getElementById('gpuModel').value;
+  const p = CLOUD_PRICING[provider];
+  if (!p) return;
+
+  let html = `<strong>${p.name}</strong> — representative hourly GPU prices:<br>`;
+  const gpus = Object.entries(p.gpus);
+  for (const [key, price] of gpus) {
+    const gpuName = GPU_SPECS[key] ? GPU_SPECS[key].name : key;
+    const priceStr = price !== null ? `$${price.toFixed(2)}/hr` : 'N/A';
+    const highlight = key === selGpu ? 'color:var(--accent);font-weight:600' : '';
+    html += `<span style="${highlight}">  ${gpuName}: ${priceStr}</span><br>`;
+  }
+  document.getElementById('cloudPriceTable').innerHTML = html;
 }
 
 function filterPresets() {
@@ -366,6 +434,16 @@ function recalculate() {
   document.getElementById('rNvme').textContent = nvmeGB.toFixed(0);
   document.getElementById('rTokensPerDollar').textContent = tokDollarFormatted;
 
+  // Cloud pricing cost estimate
+  const provider = document.getElementById('cloudProvider').value;
+  const gpuKey = document.getElementById('gpuModel').value === 'custom' ? null : document.getElementById('gpuModel').value;
+  const cloudPrice = (gpuKey && CLOUD_PRICING[provider] && CLOUD_PRICING[provider].gpus[gpuKey] !== null && CLOUD_PRICING[provider].gpus[gpuKey] !== undefined)
+    ? CLOUD_PRICING[provider].gpus[gpuKey]
+    : gpu.price_hour;
+  const clusterCostPerHour = cloudPrice * gpusNeeded;
+  document.getElementById('rCostPerHour').textContent = '$' + clusterCostPerHour.toFixed(2) + '/hr';
+  document.getElementById('rCloudCost').textContent = '$' + clusterCostPerHour.toFixed(2) + '/hr';
+
   let sweetSpot = '';
   if (gpusNeeded <= totalGpus) {
     const spare = totalGpus - gpusNeeded;
@@ -389,6 +467,7 @@ function recalculate() {
   document.getElementById('notes').innerHTML = notes.join('<br>');
 
   updateArchFields();
+  updateCloudPricing();
 }
 
 function updateArchFields() {
@@ -417,6 +496,7 @@ function getConfig() {
     servingMode: document.getElementById('servingMode').value,
     tpSize: document.getElementById('tpSize').value,
     ppSize: document.getElementById('ppSize').value,
+    cloudProvider: document.getElementById('cloudProvider').value,
   };
 }
 
