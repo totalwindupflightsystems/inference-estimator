@@ -57,6 +57,23 @@
 <div class="grid">
   <div class="card">
     <h2>Model</h2>
+    <div class="row">
+      <div class="field">
+        <label>Filter by architecture</label>
+        <select id="presetFilter" onchange="filterPresets()">
+          <option value="all">All</option>
+          <option value="dense">Dense</option>
+          <option value="moe">MoE</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Preset</label>
+        <select id="modelPreset" onchange="applyPreset()">
+          <option value="">-- Select preset --</option>
+        </select>
+      </div>
+    </div>
+    <div id="presetDesc" class="notes" style="display:none;margin-top:0;margin-bottom:14px"></div>
     <div class="field">
       <label>Number of Parameters (billions)</label>
       <input type="number" id="params" value="70" step="0.1" min="0.1" max="1000">
@@ -206,6 +223,18 @@ const GPU_SPECS = {
   'RTX6000-48':{ vram: 48,  bw: 960,  name: 'RTX 6000 Ada 48GB', price_hour: 0.80 },
 };
 
+const MODEL_PRESETS = {
+  'llama-3-70b':      { name: 'Llama 3 70B',       params: 70,  arch: 'dense', nLayers: 80,  nKvHeads: 8, headDim: 128, hiddenSize: 8192,  desc: 'Meta Llama 3 — 70B dense, 80 layers, GQA (8 KV heads), 128 head dim' },
+  'llama-4-400b-moe':  { name: 'Llama 4 400B (MoE)', params: 400, arch: 'moe',  activeParams: 40,   nLayers: 126, nKvHeads: 8, headDim: 128, hiddenSize: 16384, desc: 'Meta Llama 4 Behemoth — 400B total, ~40B active, 16 experts, 126 layers' },
+  'deepseek-v3':       { name: 'DeepSeek V3',         params: 671, arch: 'moe',  activeParams: 37,   nLayers: 61,  nKvHeads: 8, headDim: 128, hiddenSize: 7168,  desc: 'DeepSeek V3 — 671B total MoE, 37B active, MLA attention, 61 layers' },
+  'deepseek-v4':       { name: 'DeepSeek V4',         params: 685, arch: 'moe',  activeParams: 37,   nLayers: 61,  nKvHeads: 8, headDim: 128, hiddenSize: 7168,  desc: 'DeepSeek V4 — 685B total MoE, 37B active, enhanced MLA' },
+  'mixtral-8x22b':     { name: 'Mixtral 8×22B',       params: 141, arch: 'moe',  activeParams: 39,   nLayers: 56,  nKvHeads: 8, headDim: 128, hiddenSize: 6144,  desc: 'Mistral Mixtral 8×22B — 141B total, 39B active, 8 experts (top-2), 56 layers' },
+  'qwen-2.5-72b':      { name: 'Qwen 2.5 72B',        params: 72,  arch: 'dense',                       nLayers: 80,  nKvHeads: 8, headDim: 128, hiddenSize: 8192,  desc: 'Alibaba Qwen 2.5 — 72B dense, 80 layers, GQA' },
+  'minimax-m3-moe':    { name: 'MiniMax-M3 (MoE)',    params: 456, arch: 'moe',  activeParams: 45.9,  nLayers: 72,  nKvHeads: 8, headDim: 128, hiddenSize: 8192,  desc: 'MiniMax M3 — 456B total MoE, 45.9B active, 72 layers, hybrid attention' },
+  'gemma-3-27b':       { name: 'Gemma 3 27B',         params: 27,  arch: 'dense',                       nLayers: 46,  nKvHeads: 8, headDim: 128, hiddenSize: 4608,  desc: 'Google Gemma 3 — 27B dense, 46 layers, GQA' },
+  'mistral-large-2':   { name: 'Mistral Large 2',     params: 123, arch: 'dense',                       nLayers: 88,  nKvHeads: 8, headDim: 128, hiddenSize: 12288, desc: 'Mistral Large 2 — 123B dense, 88 layers, GQA' },
+};
+
 function getGpuSpec() {
   const sel = document.getElementById('gpuModel').value;
   if (sel === 'custom') return { vram: parseFloat(document.getElementById('customVram').value) || 80, bw: 2000, name: 'Custom', price_hour: 2.00 };
@@ -215,6 +244,54 @@ function getGpuSpec() {
 function updateGpuSpecs() {
   const sel = document.getElementById('gpuModel').value;
   document.getElementById('customVramField').style.display = sel === 'custom' ? '' : 'none';
+  recalculate();
+}
+
+function filterPresets() {
+  const filter = document.getElementById('presetFilter').value;
+  const sel = document.getElementById('modelPreset');
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">-- Select preset --</option>';
+  for (const [key, p] of Object.entries(MODEL_PRESETS)) {
+    if (filter === 'all' || p.arch === filter) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    }
+  }
+  // Try to restore previous selection if still valid
+  if (curVal && sel.querySelector(`option[value="${curVal}"]`)) {
+    sel.value = curVal;
+  }
+}
+
+function applyPreset() {
+  const key = document.getElementById('modelPreset').value;
+  const descDiv = document.getElementById('presetDesc');
+  if (!key) {
+    descDiv.style.display = 'none';
+    descDiv.innerHTML = '';
+    return;
+  }
+  const p = MODEL_PRESETS[key];
+  if (!p) return;
+
+  document.getElementById('params').value = p.params;
+  document.getElementById('arch').value = p.arch;
+  document.getElementById('archLabel').textContent = p.arch === 'moe' ? 'MoE' : 'Dense';
+  if (p.activeParams !== undefined) {
+    document.getElementById('activeParams').value = p.activeParams;
+  }
+  document.getElementById('nLayers').value = p.nLayers;
+  document.getElementById('nKvHeads').value = p.nKvHeads;
+  document.getElementById('headDim').value = p.headDim;
+  document.getElementById('hiddenSize').value = p.hiddenSize;
+  updateArchFields();
+
+  descDiv.innerHTML = p.desc;
+  descDiv.style.display = '';
+
   recalculate();
 }
 
@@ -405,12 +482,15 @@ function flashStatus(msg, isErr) {
 
 document.getElementById('arch').addEventListener('change', recalculate);
 document.querySelectorAll('input, select').forEach(el => {
+  if (el.id === 'modelPreset' || el.id === 'presetFilter') return;
   if (el.type === 'range') el.addEventListener('input', recalculate);
   else el.addEventListener('change', recalculate);
 });
 
 updateArchFields();
 recalculate();
+// Populate preset dropdown on load
+filterPresets();
 // Auto-load saved config if exists
 const saved = localStorage.getItem('cluster-estimator-config');
 if (saved) {

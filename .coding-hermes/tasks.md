@@ -4,11 +4,11 @@
 > WORK, not optional extensions. Do NOT self-pause while open tasks remain.
 > Bankai mode: all 6 phases. Every task must be completed.**
 
-## Phase 1: Model Presets
-- [ ] **CE-001**: Add model preset dropdown with common architectures — auto-fills params, layers, KV heads, head dim, hidden size
-- [ ] **CE-002**: Presets stored as JSON object in JS, filterable by architecture type
-  - Must include: Llama-3-70B, Llama-4-400B-MoE, DeepSeek-V3, DeepSeek-V4, Mixtral-8x22B, Qwen2.5-72B, **MiniMax-M3-MoE**, Gemma-3-27B, Mistral-Large-2
-- [ ] **CE-003**: Preset descriptions — show model card summary on hover/select
+## Phase 1: Model Presets ✅ — completed 2026-07-30 tick 1
+- [x] **CE-001**: Add model preset dropdown with common architectures — auto-fills params, layers, KV heads, head dim, hidden size
+- [x] **CE-002**: Presets stored as JSON object in JS, filterable by architecture type
+  - All 9 models: Llama-3-70B, Llama-4-400B-MoE, DeepSeek-V3, DeepSeek-V4, Mixtral-8x22B, Qwen2.5-72B, **MiniMax-M3-MoE**, Gemma-3-27B, Mistral-Large-2
+- [x] **CE-003**: Preset descriptions — show model card summary on hover/select
 
 ## Phase 2: Pricing
 - [ ] **CE-004**: Add cloud GPU pricing data (Lambda, RunPod, Vast.ai, CoreWeave representative prices)
