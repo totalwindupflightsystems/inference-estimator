@@ -391,6 +391,8 @@
       <label>Prefill Batch Size (requests)</label>
       <input type="number" id="prefillBatchSize" value="1" min="1" max="128" onchange="recalculate()">
     </div>
+    <!-- CE-014: Batch Queuing Factor display -->
+    <div class="notes" id="queuingFactorNote" style="margin-top:8px;font-weight:600"></div>
   </div>
 
   <div class="card">
@@ -463,6 +465,10 @@
     <div class="metric"><div class="value" id="rPrefillThroughput">—</div><div class="label">Prefill Throughput tok/s (CE-013)</div></div>
     <div class="metric"><div class="value" id="rDecodeThroughput">—</div><div class="label">Decode Throughput tok/s (CE-013)</div></div>
     <div class="metric"><div class="value" id="rPrefillLatency">—</div><div class="label">Prefill Latency ms (CE-013)</div></div>
+    <!-- CE-014: Time-to-first-token metrics -->
+    <div class="metric"><div class="value" id="rTTFT">—</div><div class="label">TTFT ms (CE-014)</div></div>
+    <div class="metric"><div class="value" id="rTTFTBatched">—</div><div class="label">TTFT Batched ms (CE-014)</div></div>
+    <div class="metric"><div class="value" id="rTtftReady">—</div><div class="label">Ready-to-Serve ms (CE-014)</div></div>
     <!-- CE-007: Serving engine overhead metrics -->
     <div class="metric"><div class="value" id="rEffectiveThroughput">—</div><div class="label">Eff. Throughput tok/s (CE-007)</div></div>
     <div class="metric"><div class="value" id="rKvWastePct">—</div><div class="label">KV Waste % (CE-007)</div></div>
@@ -1113,6 +1119,20 @@ function recalculate() {
   document.getElementById('rPrefillThroughput').textContent = effectivePrefillTps.toFixed(0) + ' tok/s';
   document.getElementById('rDecodeThroughput').textContent = effectiveDecodeThroughput.toFixed(0) + ' tok/s';
   document.getElementById('rPrefillLatency').textContent = prefillLatencyMs.toFixed(1) + ' ms';
+
+  // CE-014: TTFT estimates based on prompt length and batch queuing
+  // Base TTFT: single-request time-to-first-token (ms) = promptLen / prefillThroughput * 1000
+  const rTTFT = effectivePrefillTps > 0 ? (promptLen / effectivePrefillTps) * 1000 : 0;
+  // Batched TTFT: base * queuing factor where factor = 1 + (batchSize - 1) * 0.15
+  const batchQueuingFactor = 1 + (prefillBatchSize - 1) * 0.15;
+  const rTTFTBatched = rTTFT * batchQueuingFactor;
+  // Ready-to-serve: TTFT + model load time estimate (~200ms per GB at ~5GB/s NVMe load)
+  const modelLoadTimeMs = modelWithOverhead * 200;
+  const rTtftReady = rTTFTBatched + modelLoadTimeMs;
+  document.getElementById('rTTFT').textContent = Math.round(rTTFT).toLocaleString() + ' ms';
+  document.getElementById('rTTFTBatched').textContent = Math.round(rTTFTBatched).toLocaleString() + ' ms';
+  document.getElementById('rTtftReady').textContent = Math.round(rTtftReady).toLocaleString() + ' ms';
+  document.getElementById('queuingFactorNote').innerHTML = '<strong>CE-014 Batch Queuing Factor:</strong> ' + batchQueuingFactor.toFixed(2) + '× (at ' + prefillBatchSize + ' concurrent prefill requests)';
 
   // CE-007: Engine overhead metrics
   document.getElementById('rEffectiveThroughput').textContent = effectiveDecodeThroughput.toFixed(0) + ' tok/s';
