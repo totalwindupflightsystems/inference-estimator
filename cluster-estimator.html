@@ -210,6 +210,104 @@
     </div>
   </div>
 
+  <!-- CE-012: Expert Parallelism Card -->
+  <div class="card" id="expertCard" style="display:none">
+    <h2>Expert Placement (CE-012)</h2>
+    <div class="row">
+      <div class="field">
+        <label>Total Experts</label>
+        <input type="number" id="numExperts" value="8" min="2" max="256">
+      </div>
+      <div class="field">
+        <label>Top-K Active</label>
+        <input type="number" id="topK" value="2" min="1" max="16">
+      </div>
+    </div>
+    <div class="field">
+      <label>Expert Parallel Size (EP) <span class="slider-val" id="epLabel">1</span></label>
+      <select id="epSize" onchange="document.getElementById('epLabel').textContent=this.value;recalculate()">
+        <option value="1">1 (all experts per GPU)</option>
+        <option value="2">2</option>
+        <option value="4">4</option>
+        <option value="8">8</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>All-to-All Overhead (%)</label>
+      <input type="number" id="allToAllOverhead" value="5" min="0" max="50" onchange="recalculate()">
+    </div>
+    <div class="field">
+      <label>Load Imbalance Penalty <span class="slider-val" id="loadBalLabel">10%</span></label>
+      <input type="range" id="loadBalancePenalty" value="10" min="0" max="30" oninput="document.getElementById('loadBalLabel').textContent=this.value+'%';recalculate()">
+    </div>
+    <div class="notes" id="expertNotes">Expert placement distributes experts across GPUs. Higher EP = more GPUs but lower per-GPU expert count.</div>
+  </div>
+
+  <!-- CE-010: NVLink Topology Card -->
+  <div class="card">
+    <h2>Topology (CE-010)</h2>
+    <div class="field">
+      <label>NVLink / Interconnect Topology</label>
+      <select id="nvlinkTopo" onchange="updateNvlinkTopo()">
+        <option value="nvlink-900">NVLink 4.0 (900 GB/s)</option>
+        <option value="nvlink-1800">NVSwitch (1800 GB/s)</option>
+        <option value="pcie-5">PCIe 5.0 (128 GB/s)</option>
+        <option value="infiniband">InfiniBand NDR400 (400 GB/s)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Within-Node Bandwidth (GB/s) <span class="slider-val" id="nvlinkIntraLabel">900</span></label>
+      <input type="range" id="nvlinkIntraNodeBw" value="900" min="0" max="2000" step="25" oninput="document.getElementById('nvlinkIntraLabel').textContent=this.value;recalculate()">
+    </div>
+    <div class="field">
+      <label>Cross-Node Bandwidth (GB/s) <span class="slider-val" id="nvlinkInterLabel">50</span></label>
+      <input type="range" id="nvlinkInterNodeBw" value="50" min="0" max="500" step="5" oninput="document.getElementById('nvlinkInterLabel').textContent=this.value;recalculate()">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>TP Cross-Node Policy</label>
+        <select id="tpCrossNode" onchange="recalculate()">
+          <option value="auto">Auto (allow if needed)</option>
+          <option value="same-node">Force same-node (NVLink only)</option>
+          <option value="cross-node">Allow cross-node</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>PP Cross-Node Policy</label>
+        <select id="ppCrossNode" onchange="recalculate()">
+          <option value="auto">Auto (allow if needed)</option>
+          <option value="same-node">Force same-node (NVLink only)</option>
+          <option value="cross-node">Allow cross-node</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- CE-011: Multi-node Scaling Card -->
+  <div class="card">
+    <h2>Multi-Node Scaling (CE-011)</h2>
+    <div class="field">
+      <label>Scaling Model</label>
+      <select id="scalingModel" onchange="recalculate()">
+        <option value="ideal">Ideal (linear scaling)</option>
+        <option value="nccl-aware">NCCL-aware</option>
+        <option value="empirical" selected>Empirical</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>NCCL All-Reduce Latency (μs)</label>
+      <input type="number" id="ncclAllReduceLatencyUs" value="10" min="1" max="1000" step="1" onchange="recalculate()">
+    </div>
+    <div class="field">
+      <label>NCCL BW Utilization <span class="slider-val" id="ncclBwUtilLabel">0.80</span></label>
+      <input type="range" id="ncclBwUtil" value="0.80" min="0" max="1" step="0.05" oninput="document.getElementById('ncclBwUtilLabel').textContent=parseFloat(this.value).toFixed(2);recalculate()">
+    </div>
+    <div class="field">
+      <label>Pipeline Bubble Overhead (%)</label>
+      <input type="number" id="pipelineBubblePct" value="15" min="0" max="50" step="1" onchange="recalculate()">
+    </div>
+  </div>
+
   <!-- CE-007: Serving Engine Card -->
   <div class="card">
     <h2>Serving Engine (CE-007)</h2>
@@ -351,6 +449,18 @@
     <!-- CE-008: SGLang RadixAttention metrics -->
     <div class="metric"><div class="value" id="rSglangRadixThroughput">—</div><div class="label">SGLang Radix Tput tok/s (CE-008)</div></div>
     <div class="metric"><div class="value" id="rSglangCacheNote">—</div><div class="label">Cache Hit/Miss Ratio (CE-008)</div></div>
+    <!-- CE-012: Expert Parallelism metrics -->
+    <div class="metric"><div class="value" id="rEpEfficiency">—</div><div class="label">EP All-to-All Eff % (CE-012)</div></div>
+    <div class="metric"><div class="value" id="rEpAdjustedGpus">—</div><div class="label">MoE-Adjusted GPUs (CE-012)</div></div>
+    <!-- CE-010: NVLink topology metrics -->
+    <div class="metric"><div class="value" id="rNvlinkBwUtil">—</div><div class="label">NVLink BW Utilization (CE-010)</div></div>
+    <div class="metric"><div class="value" id="rCrossNodePenalty">—</div><div class="label">Cross-Node Penalty (CE-010)</div></div>
+    <div class="metric"><div class="value" id="rExpertsPerGpu">—</div><div class="label">Experts per GPU (CE-012)</div></div>
+    <div class="metric"><div class="value" id="rMoEMemAdjustment">—</div><div class="label">MoE Mem Adjustment GB (CE-012)</div></div>
+    <!-- CE-011: Multi-node scaling efficiency metrics -->
+    <div class="metric"><div class="value" id="rScalingEfficiency">—</div><div class="label">Scaling Efficiency % (CE-011)</div></div>
+    <div class="metric"><div class="value" id="rMultiNodePenalty">—</div><div class="label">Multi-Node Penalty (CE-011)</div></div>
+    <div class="metric"><div class="value" id="rEffectiveTputWithScaling">—</div><div class="label">Eff. Tput w/ Scaling tok/s (CE-011)</div></div>
   </div>
   <div class="notes" id="notes" style="margin-top:16px"></div>
 </div>
@@ -365,6 +475,14 @@ const GPU_SPECS = {
   'L40S-48':   { vram: 48,  bw: 864,  name: 'L40S 48GB', price_hour: 1.10 },
   'MI300X-192':{ vram: 192, bw: 5300, name: 'MI300X 192GB', price_hour: 3.00 },
   'RTX6000-48':{ vram: 48,  bw: 960,  name: 'RTX 6000 Ada 48GB', price_hour: 0.80 },
+};
+
+// CE-010: NVLink topology bandwidth models (GB/s)
+const NVLink_TOPOLOGY = {
+  'nvlink-900':   { name: 'NVLink 4.0 (900 GB/s)',     intraNodeBw: 900,  interNodeBw: 50,  type: 'nvlink' },
+  'nvlink-1800':  { name: 'NVSwitch (1800 GB/s)',       intraNodeBw: 1800, interNodeBw: 100, type: 'nvswitch' },
+  'pcie-5':       { name: 'PCIe 5.0 (128 GB/s)',        intraNodeBw: 128,  interNodeBw: 25,  type: 'pcie' },
+  'infiniband':   { name: 'InfiniBand NDR400 (400 GB/s)', intraNodeBw: 400, interNodeBw: 400, type: 'ib' },
 };
 
 const CLOUD_PRICING = {
@@ -455,6 +573,22 @@ const SGLANG_RADIX = {
   cacheHitRate: 0.5,
   prefixCacheSize: 4,
   radixTreeOverhead: 0.05,
+};
+
+// CE-012: Expert Parallelism (EP) for MoE models
+const MOE_EXPERT_CONFIG = {
+  defaultNumExperts: 8,
+  defaultTopK: 2,
+  expertDispatchOverhead: 0.05,      // 5% overhead per all-to-all
+  expertLoadBalanceOverhead: 0.10,   // 10% penalty for imbalanced routing
+};
+
+// CE-011: Multi-node scaling efficiency model (communication overhead curves)
+const SCALING_EFFICIENCY = {
+  ncclAllReduceBaseLatency: 10,   // microseconds per all-reduce call, per GPU
+  ncclBandwidthUtilization: 0.80, // 80% of theoretical NCCL bandwidth
+  pipelineBubbleOverhead: 0.15,   // 15% idle time per pipeline stage transition
+  scalingEfficiencyCurve: { 1: 1.0, 2: 0.95, 4: 0.88, 8: 0.78, 16: 0.65, 32: 0.50, 64: 0.35, 128: 0.22 },
 };
 
 const MODEL_PRESETS = {
@@ -594,6 +728,20 @@ function recalculate() {
   const pp = parseInt(document.getElementById('ppSize').value);
   const gpu = getGpuSpec();
 
+  // CE-010: NVLink topology bandwidth fields
+  const nvlinkTopo = document.getElementById('nvlinkTopo').value;
+  const nvlinkTopoCfg = NVLink_TOPOLOGY[nvlinkTopo] || NVLink_TOPOLOGY['nvlink-900'];
+  const nvlinkIntraNodeBw = parseInt(document.getElementById('nvlinkIntraNodeBw').value) || nvlinkTopoCfg.intraNodeBw;
+  const nvlinkInterNodeBw = parseInt(document.getElementById('nvlinkInterNodeBw').value) || nvlinkTopoCfg.interNodeBw;
+  const tpCrossNode = document.getElementById('tpCrossNode').value;
+  const ppCrossNode = document.getElementById('ppCrossNode').value;
+
+  // CE-011: Multi-node scaling efficiency fields
+  const scalingModel = document.getElementById('scalingModel').value;
+  const ncclAllReduceLatencyUs = parseFloat(document.getElementById('ncclAllReduceLatencyUs').value) || SCALING_EFFICIENCY.ncclAllReduceBaseLatency;
+  const ncclBwUtil = parseFloat(document.getElementById('ncclBwUtil').value) || SCALING_EFFICIENCY.ncclBandwidthUtilization;
+  const pipelineBubblePct = parseFloat(document.getElementById('pipelineBubblePct').value) / 100 || SCALING_EFFICIENCY.pipelineBubbleOverhead;
+
   // CE-007: Serving engine overhead
   const servingEngine = document.getElementById('servingEngine').value;
   const engineCfg = SERVING_OVERHEAD[servingEngine] || SERVING_OVERHEAD['raw'];
@@ -649,6 +797,59 @@ function recalculate() {
   const totalGpus = gpusPerServer * numServers;
   const effectiveParallel = Math.ceil(totalGpus / (tp * pp));
 
+  // CE-011: Multi-node scaling efficiency computation
+  // Only apply inter-node penalty when numServers > 1 and TP/PP spans nodes
+  let scalingEfficiency = 1.0;
+  let allReducePenalty = 0;
+  let pipelineBubblePenalty = 0;
+  if (numServers > 1) {
+    const tpGpusPerServer = Math.min(tp, gpusPerServer);
+    const crossNodeTP = tp > gpusPerServer;  // TP spans multiple nodes
+    const crossNodePP = pp > 1 && ppCrossNode === 'cross-node'; // PP across nodes
+
+    // Cross-node NCCL all-reduce latency penalty for TP across nodes
+    if (crossNodeTP) {
+      // Communication overhead per token: all-reduce latency scaled by TP factor
+      // normalized by compute time per token
+      const computeTimePerToken = (effParams * (quantBpw / 8) * 1e9) / (gpu.bw * 1e9 * tp);
+      const commTimePerAllReduce = ncclAllReduceLatencyUs * 1e-6; // seconds
+      const numAllReduces = nLayers * 2; // 2 all-reduces per transformer layer
+      const totalCommTime = commTimePerAllReduce * numAllReduces * (tp / tpGpusPerServer); // scaled by cross-node ratio
+      const totalComputeTime = computeTimePerToken * ctxLen * batchSize;
+      allReducePenalty = totalComputeTime > 0 ? Math.min(totalCommTime / (totalCommTime + totalComputeTime), 0.5) : 0;
+    }
+
+    // Pipeline bubble efficiency: (pp - 1) / (pp * 2) fraction idle per microbatch
+    if (crossNodePP) {
+      pipelineBubblePenalty = ((pp - 1) / (pp * 2)) * pipelineBubblePct;
+    } else if (pp > 1) {
+      // Intra-node PP — lower bubble overhead (NVLink helps)
+      pipelineBubblePenalty = ((pp - 1) / (pp * 2)) * (pipelineBubblePct * 0.3); // 30% of cross-node overhead
+    }
+
+    // Combined node-scaling efficiency from communication overhead
+    const commEfficiency = (1 - allReducePenalty) * (1 - pipelineBubblePenalty);
+
+    // Scaling efficiency curve lookup or NCCL-aware model
+    if (scalingModel === 'empirical') {
+      // Clamp numServers to nearest curve point
+      const curveKeys = Object.keys(SCALING_EFFICIENCY.scalingEfficiencyCurve).map(Number).sort((a,b) => a - b);
+      let curveVal = SCALING_EFFICIENCY.scalingEfficiencyCurve[1] || 1.0;
+      for (const k of curveKeys) {
+        if (numServers >= k) curveVal = SCALING_EFFICIENCY.scalingEfficiencyCurve[k];
+      }
+      scalingEfficiency = curveVal * commEfficiency;
+    } else if (scalingModel === 'nccl-aware') {
+      // NCCL-aware: compute penalty from bandwidth utilization
+      const effectiveBw = gpu.bw * ncclBwUtil;
+      const bwRatio = effectiveBw / gpu.bw;
+      scalingEfficiency = bwRatio * commEfficiency;
+    } else {
+      // Ideal: linear scaling
+      scalingEfficiency = commEfficiency;
+    }
+  }
+
   const effParams = arch === 'moe' ? activeB : paramsB;
   const modelMemGB = effParams * (quantBpw / 8);
   const modelWithOverhead = modelMemGB * (1 + overhead);
@@ -669,6 +870,63 @@ function recalculate() {
   const totalPerGpuGB = modelPerGpuGB * (1 + overhead) + kvPerGpuGB + prefixCachePerGpuGB;
   const gpusNeeded = Math.ceil(totalPerGpuGB / (gpu.vram * 0.90));
   const serversNeeded = Math.ceil(gpusNeeded / gpusPerServer);
+
+  // CE-010: NVLink bandwidth matrix — cross-node TP/PP penalty
+  // Cross-node TP: effective bandwidth = interNodeBw (much slower than NVLink)
+  // Cross-node PP: pipeline bubble overhead scales inversely with bandwidth ratio
+  const bwRatio = nvlinkInterNodeBw > 0 ? nvlinkIntraNodeBw / nvlinkInterNodeBw : 1;
+  let nvlinkGpuPenalty = 1.0;
+  let crossNodePenaltyNote = 'All intra-node — optimal';
+  const gpusNeededPerTp = tp > 0 ? Math.ceil(gpusNeeded / tp) : gpusNeeded;
+  const tpFitsNode = gpusNeededPerTp <= gpusPerServer;
+  const ppFitsNode = pp > 1 ? (gpusNeeded / pp <= gpusPerServer) : true;
+  // Determine if TP crosses node boundaries
+  const tpIsCrossNode = tpCrossNode === 'cross-node' || (tpCrossNode === 'auto' && !tpFitsNode && tp > gpusPerServer);
+  const ppIsCrossNode = ppCrossNode === 'cross-node' || (ppCrossNode === 'auto' && !ppFitsNode && pp > 1);
+  if (tpIsCrossNode || ppIsCrossNode) {
+    // Cross-node penalty: slower bandwidth requires more GPUs to maintain throughput
+    // Penalty factor = 1 + log(bwRatio) to represent diminishing returns
+    const crossPenalty = 1.0 + Math.log10(Math.max(1, bwRatio)) * 0.15;
+    nvlinkGpuPenalty = crossPenalty;
+    const crossDesc = [];
+    if (tpIsCrossNode) crossDesc.push('TP crosses nodes');
+    if (ppIsCrossNode) crossDesc.push('PP crosses nodes');
+    crossNodePenaltyNote = `Cross-node penalty: ×${crossPenalty.toFixed(2)} (${crossDesc.join(', ')}, intra/inter BW ratio ${bwRatio.toFixed(0)}:1)`;
+  }
+  const nvlinkAdjustedGpus = Math.ceil(gpusNeeded * nvlinkGpuPenalty);
+
+  // CE-012: Expert Parallelism (EP) overhead for MoE architectures
+  let epAllToAllOverhead = 0;
+  let epLoadImbOverhead = 0;
+  let epAdjustedGpus = nvlinkAdjustedGpus;
+  let epExpertsPerGpu = 0;
+  let epEfficiency = 100;
+  let epMemAdjustment = 0;
+  if (arch === 'moe') {
+    const numExperts = parseInt(document.getElementById('numExperts').value) || MOE_EXPERT_CONFIG.defaultNumExperts;
+    const topK = parseInt(document.getElementById('topK').value) || MOE_EXPERT_CONFIG.defaultTopK;
+    const epSize = parseInt(document.getElementById('epSize').value) || 1;
+    const allToAllOverheadPct = parseFloat(document.getElementById('allToAllOverhead').value) || 5;
+    const loadBalancePenalty = parseFloat(document.getElementById('loadBalancePenalty').value) || 10;
+
+    // All-to-all dispatch overhead: scales with (numExperts / epSize) * (topK / numExperts)
+    epAllToAllOverhead = (allToAllOverheadPct / 100) * (numExperts / epSize) * (topK / numExperts);
+    // Load imbalance penalty
+    epLoadImbOverhead = loadBalancePenalty / 100;
+    // Combined EP overhead
+    const epCombinedOverhead = 1 + epAllToAllOverhead + epLoadImbOverhead;
+
+    // Effective GPU count adjusted for EP overhead
+    epAdjustedGpus = Math.ceil(gpusNeeded * epCombinedOverhead);
+    // Experts per GPU (after EP sharding)
+    epExpertsPerGpu = epSize > 1 ? Math.ceil(numExperts / epSize) : numExperts;
+    // EP efficiency: how much of the all-to-all bandwidth is usable
+    epEfficiency = epSize > 1 ? ((1 - epAllToAllOverhead - epLoadImbOverhead) * 100) : 100;
+    // Memory adjustment: extra VRAM from expert distribution across EP groups
+    // More experts per GPU = more model memory needed for the shared expert layers
+    const epMemScale = epSize > 1 ? (epExpertsPerGpu / numExperts) : 1;
+    epMemAdjustment = modelWithOverhead * (1 - epMemScale);
+  }
 
   let gpuUtil = (totalPerGpuGB / gpu.vram) * 100;
   let utilClass = gpuUtil < 80 ? 'ok' : gpuUtil > 95 ? 'bad' : 'warn';
@@ -833,12 +1091,37 @@ function recalculate() {
     document.getElementById('rSglangCacheNote').textContent = 'SGLang only';
   }
 
+  // CE-012: Expert Parallelism metrics
+  document.getElementById('rEpEfficiency').textContent = arch === 'moe' ? epEfficiency.toFixed(1) + '%' : 'N/A (dense)';
+  document.getElementById('rEpAdjustedGpus').textContent = arch === 'moe' ? epAdjustedGpus : 'N/A (dense)';
+  document.getElementById('rExpertsPerGpu').textContent = arch === 'moe' ? epExpertsPerGpu : 'N/A (dense)';
+  document.getElementById('rMoEMemAdjustment').textContent = arch === 'moe' ? epMemAdjustment.toFixed(1) + ' GB' : 'N/A (dense)';
+
+  // CE-010: NVLink topology metrics
+  const nvlinkBwUtilPct = gpu.bw > 0 ? (nvlinkIntraNodeBw / gpu.bw * 100) : 0;
+  document.getElementById('rNvlinkBwUtil').textContent = nvlinkIntraNodeBw + ' GB/s (' + nvlinkBwUtilPct.toFixed(0) + '% of GPU BW)';
+  document.getElementById('rCrossNodePenalty').textContent = !tpIsCrossNode && !ppIsCrossNode ? 'None (intra-node)' : nvlinkGpuPenalty.toFixed(2) + '×';
+
+  // CE-011: Multi-node scaling efficiency results
+  const scalingEfficiencyPct = (scalingEfficiency * 100).toFixed(1);
+  document.getElementById('rScalingEfficiency').textContent = scalingEfficiencyPct + '%';
+  const multiNodePenaltyPct = ((1 - scalingEfficiency) * 100).toFixed(1);
+  document.getElementById('rMultiNodePenalty').textContent = numServers > 1 ? multiNodePenaltyPct + '%' : 'N/A (single node)';
+  const throughputWithScaling = numServers > 1 ? (effectiveDecodeThroughput * scalingEfficiency) : effectiveDecodeThroughput;
+  document.getElementById('rEffectiveTputWithScaling').textContent = throughputWithScaling.toFixed(0) + ' tok/s';
+
   let notes = [];
   if (servingMode === 'disaggregated') {
     notes.push(`<strong>Disaggregated:</strong> Prefill GPUs need ${modelPerGpuGB.toFixed(1)}GB model + compute. Decode GPUs need ${kvPerGpuGB.toFixed(1)}GB KV cache + bandwidth.`);
   }
   if (arch === 'moe') {
     notes.push(`<strong>MoE:</strong> ${paramsB}B total / ${activeB}B active. Only active params consume VRAM during inference.`);
+    // CE-012: Expert Parallelism note
+    const epNoteEpSize = parseInt(document.getElementById('epSize').value) || 1;
+    const epNoteNumExperts = parseInt(document.getElementById('numExperts').value) || MOE_EXPERT_CONFIG.defaultNumExperts;
+    if (epNoteEpSize > 1) {
+      notes.push(`<strong>CE-012 Expert Parallelism:</strong> EP=${epNoteEpSize} — ${epNoteNumExperts} experts sharded to ${epExpertsPerGpu}/GPU. All-to-all overhead ${(epAllToAllOverhead*100).toFixed(1)}%, load imbalance ${(epLoadImbOverhead*100).toFixed(1)}%. EP efficiency ${epEfficiency.toFixed(1)}%. Adjusted GPUs: ${epAdjustedGpus} (base: ${gpusNeeded}).`);
+    }
   }
   if (tp > 1) notes.push(`<strong>TP=${tp}:</strong> Model sharded across ${tp} GPUs. Per-GPU model: ${modelPerGpuGB.toFixed(1)} GB.`);
   if (ctxLen > 131072) notes.push(`<strong>Long context:</strong> KV cache dominates at ${kvEngineOverhead.toFixed(0)} GB. Consider FP8 KV cache precision.`);
@@ -879,6 +1162,12 @@ function recalculate() {
     const advantage = Math.abs(tgiVsVllmRatio - 100).toFixed(1);
     notes.push(`<strong>CE-009 TGI vs vLLM:</strong> Same HW — TGI ${tgiThroughput.toFixed(0)} tok/s vs vLLM ${vllmThroughputForCompare.toFixed(0)} tok/s (${winner} +${advantage}%). TGI KV waste ${(engineCfg.kvWaste*100).toFixed(0)}% vs vLLM ${(vllmCfg.kvWaste*100).toFixed(0)}%, batch eff ${(engineCfg.batchEff*100).toFixed(0)}% vs ${(vllmCfg.batchEff*100).toFixed(0)}%.`);
   }
+  // CE-010: NVLink topology note
+  notes.push(`<strong>CE-010 Topology:</strong> ${nvlinkTopoCfg.name} — intra-node ${nvlinkIntraNodeBw} GB/s, cross-node ${nvlinkInterNodeBw} GB/s (ratio ${bwRatio.toFixed(0)}:1). ${crossNodePenaltyNote}. GPU penalty: ×${nvlinkGpuPenalty.toFixed(2)}, NVLink-adjusted GPUs: ${nvlinkAdjustedGpus} (base: ${gpusNeeded}).`);
+  // CE-011: Multi-node scaling efficiency note
+  if (numServers > 1) {
+    notes.push(`<strong>CE-011 Multi-Node Scaling:</strong> ${numServers} nodes — scaling efficiency ${(scalingEfficiency*100).toFixed(1)}% (${scalingModel} model). All-reduce penalty ${(allReducePenalty*100).toFixed(1)}%, pipeline bubble ${(pipelineBubblePenalty*100).toFixed(1)}%. Eff. throughput: ${(effectiveDecodeThroughput*scalingEfficiency).toFixed(0)} tok/s.`);
+  }
   document.getElementById('notes').innerHTML = notes.join('<br>');
 
   updateArchFields();
@@ -902,6 +1191,7 @@ function recalculate() {
 function updateArchFields() {
   const arch = document.getElementById('arch').value;
   document.getElementById('activeParamsField').style.display = arch === 'moe' ? '' : 'none';
+  document.getElementById('expertCard').style.display = arch === 'moe' ? '' : 'none';
 }
 
 function getConfig() {
@@ -940,6 +1230,23 @@ function getConfig() {
     sglangCacheHitRate: document.getElementById('sglangCacheHitRate').value,
     sglangPrefixCacheSize: document.getElementById('sglangPrefixCacheSize').value,
     sglangRadixTreeOverhead: document.getElementById('sglangRadixTreeOverhead').value,
+    // CE-012: Expert Parallelism config
+    numExperts: document.getElementById('numExperts').value,
+    topK: document.getElementById('topK').value,
+    epSize: document.getElementById('epSize').value,
+    allToAllOverhead: document.getElementById('allToAllOverhead').value,
+    loadBalancePenalty: document.getElementById('loadBalancePenalty').value,
+    // CE-010: NVLink topology config
+    nvlinkTopo: document.getElementById('nvlinkTopo').value,
+    nvlinkIntraNodeBw: document.getElementById('nvlinkIntraNodeBw').value,
+    nvlinkInterNodeBw: document.getElementById('nvlinkInterNodeBw').value,
+    tpCrossNode: document.getElementById('tpCrossNode').value,
+    ppCrossNode: document.getElementById('ppCrossNode').value,
+    // CE-011: Multi-node scaling config
+    scalingModel: document.getElementById('scalingModel').value,
+    ncclAllReduceLatencyUs: document.getElementById('ncclAllReduceLatencyUs').value,
+    ncclBwUtil: document.getElementById('ncclBwUtil').value,
+    pipelineBubblePct: document.getElementById('pipelineBubblePct').value,
   };
 }
 
@@ -956,6 +1263,23 @@ function setConfig(cfg) {
   document.getElementById('quantLabel').textContent = document.getElementById('quant').selectedOptions[0]?.text || '';
   document.getElementById('archLabel').textContent = (cfg.arch || 'dense') === 'moe' ? 'MoE' : 'Dense';
   document.getElementById('sglangHitLabel').textContent = parseFloat(cfg.sglangCacheHitRate || 0.5).toFixed(2);
+  // CE-012: Update EP labels
+  document.getElementById('epLabel').textContent = cfg.epSize || 1;
+  document.getElementById('loadBalLabel').textContent = (cfg.loadBalancePenalty || 10) + '%';
+  // CE-010: Update NVLink labels
+  document.getElementById('nvlinkIntraLabel').textContent = cfg.nvlinkIntraNodeBw || 900;
+  document.getElementById('nvlinkInterLabel').textContent = cfg.nvlinkInterNodeBw || 50;
+  recalculate();
+}
+
+// CE-010: Update NVLink topology sliders when preset changes
+function updateNvlinkTopo() {
+  const topo = document.getElementById('nvlinkTopo').value;
+  const cfg = NVLink_TOPOLOGY[topo] || NVLink_TOPOLOGY['nvlink-900'];
+  document.getElementById('nvlinkIntraNodeBw').value = cfg.intraNodeBw;
+  document.getElementById('nvlinkIntraLabel').textContent = cfg.intraNodeBw;
+  document.getElementById('nvlinkInterNodeBw').value = cfg.interNodeBw;
+  document.getElementById('nvlinkInterLabel').textContent = cfg.interNodeBw;
   recalculate();
 }
 
