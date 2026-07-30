@@ -1269,6 +1269,8 @@ function setConfig(cfg) {
   // CE-010: Update NVLink labels
   document.getElementById('nvlinkIntraLabel').textContent = cfg.nvlinkIntraNodeBw || 900;
   document.getElementById('nvlinkInterLabel').textContent = cfg.nvlinkInterNodeBw || 50;
+  // CE-011: Update NCCL BW util label
+  document.getElementById('ncclBwUtilLabel').textContent = parseFloat(cfg.ncclBwUtil || 0.80).toFixed(2);
   recalculate();
 }
 
