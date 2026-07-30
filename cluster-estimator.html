@@ -580,7 +580,21 @@ function recalculate() {
 
   // Memory-bandwidth-bound decode throughput (tokens/sec per GPU)
   const memBwTokensPerSec = gpu.bw * 1e9 / (effParams * 1e9 * (quantBpw / 8) / tp);
-  const tokensPerDollar = (memBwTokensPerSec * 3600) / gpu.price_hour;
+
+  // CE-007: Apply serving engine overhead to throughput
+  // batchEff < 1.0 means continuous batching improves effective throughput
+  const effectiveDecodeThroughput = memBwTokensPerSec / engineCfg.batchEff;
+  // KV waste comparison: show savings vs raw baseline
+  const rawKvWaste = SERVING_OVERHEAD['raw'].kvWaste;
+  const kvWasteSavingsPct = ((rawKvWaste - engineCfg.kvWaste) / rawKvWaste) * 100;
+  // vLLM paged attention block waste calculation
+  const avgSeqLen = batchSize > 0 ? ctxLen / batchSize : ctxLen;
+  const leftoverTokens = avgSeqLen % vllmBlockSize;
+  const blockWasteRate = leftoverTokens > 0 ? (vllmBlockSize - leftoverTokens) / vllmBlockSize : 0;
+  // Effective batch throughput improvement (batchEff < 1 = more efficient)
+  const batchEfficiencyPct = (1.0 / engineCfg.batchEff) * 100;
+
+  const tokensPerDollar = (effectiveDecodeThroughput * 3600) / gpu.price_hour;
   const tokDollarFormatted = tokensPerDollar > 1e6
     ? (tokensPerDollar/1e6).toFixed(1) + 'M'
     : tokensPerDollar > 1e3
@@ -598,13 +612,15 @@ function recalculate() {
   // CE-005: Cost-per-1M-tokens calculations
   // Prefill is compute-bound (~50% of memory BW efficiency for compute)
   const prefillTokensPerSec = (gpu.bw * 1e9) / (effParams * 1e9 * (quantBpw / 8) / tp) * 0.5;
+  // CE-007: Apply engine prefill efficiency (chunked prefill savings)
+  const effectivePrefillTps = prefillTokensPerSec / engineCfg.prefillEff;
   // cost_per_1M_input = (1M tokens / prefill_tok_per_sec / 3600 sec/hr) * price_per_gpu * gpus
   const costPer1MInput = prefillTokensPerSec > 0
     ? ((1_000_000 / prefillTokensPerSec / 3600) * cloudPricePerGpu * gpusNeeded)
     : 0;
   // cost_per_1M_output = (1M tokens / decode_tok_per_sec / 3600 sec/hr) * price_per_gpu * gpus
-  const costPer1MOutput = memBwTokensPerSec > 0
-    ? ((1_000_000 / memBwTokensPerSec / 3600) * cloudPricePerGpu * gpusNeeded)
+  const costPer1MOutput = effectiveDecodeThroughput > 0
+    ? ((1_000_000 / effectiveDecodeThroughput / 3600) * cloudPricePerGpu * gpusNeeded)
     : 0;
 
   // CE-006: Breakeven analysis
@@ -623,7 +639,7 @@ function recalculate() {
 
   // --- Update Results ---
   document.getElementById('rModelMem').textContent = modelWithOverhead.toFixed(1);
-  document.getElementById('rKvCache').textContent = kvWithOverhead.toFixed(2);
+  document.getElementById('rKvCache').textContent = kvEngineOverhead.toFixed(2);
   document.getElementById('rTotalPerGpu').textContent = totalPerGpuGB.toFixed(1);
   document.getElementById('rGpusNeeded').textContent = gpusNeeded;
   document.getElementById('rServersNeeded').textContent = serversNeeded;
@@ -687,6 +703,11 @@ function recalculate() {
   // Update API model list highlighting
   updateApiModelList();
 
+  // CE-007: Engine overhead metrics
+  document.getElementById('rEffectiveThroughput').textContent = effectiveDecodeThroughput.toFixed(0) + ' tok/s';
+  document.getElementById('rKvWastePct').textContent = engineCfg.kvWaste === rawKvWaste ? '0% (baseline)' : (engineCfg.kvWaste * 100).toFixed(1) + '%';
+  document.getElementById('rBatchEfficiency').textContent = batchEfficiencyPct.toFixed(0) + '%';
+
   let notes = [];
   if (servingMode === 'disaggregated') {
     notes.push(`<strong>Disaggregated:</strong> Prefill GPUs need ${modelPerGpuGB.toFixed(1)}GB model + compute. Decode GPUs need ${kvPerGpuGB.toFixed(1)}GB KV cache + bandwidth.`);
@@ -695,14 +716,16 @@ function recalculate() {
     notes.push(`<strong>MoE:</strong> ${paramsB}B total / ${activeB}B active. Only active params consume VRAM during inference.`);
   }
   if (tp > 1) notes.push(`<strong>TP=${tp}:</strong> Model sharded across ${tp} GPUs. Per-GPU model: ${modelPerGpuGB.toFixed(1)} GB.`);
-  if (ctxLen > 131072) notes.push(`<strong>Long context:</strong> KV cache dominates at ${kvWithOverhead.toFixed(0)} GB. Consider FP8 KV cache precision.`);
-  notes.push(`<strong>Memory BW limit:</strong> ~${memBwTokensPerSec.toFixed(0)} tok/s decode per GPU at this quant.`);
+  if (ctxLen > 131072) notes.push(`<strong>Long context:</strong> KV cache dominates at ${kvEngineOverhead.toFixed(0)} GB. Consider FP8 KV cache precision.`);
+  notes.push(`<strong>Memory BW limit:</strong> ~${memBwTokensPerSec.toFixed(0)} tok/s raw, ~${effectiveDecodeThroughput.toFixed(0)} tok/s effective with ${servingEngine} engine.`);
   // CE-005 note
   notes.push(`<strong>CE-005 Costs:</strong> Input $${costPer1MInput.toFixed(2)}/1M tok (prefill ~${prefillTokensPerSec.toFixed(0)} tok/s), Output $${costPer1MOutput.toFixed(2)}/1M tok (decode ~${memBwTokensPerSec.toFixed(0)} tok/s). Assumes 100% utilization.`);
   // CE-006 note
   if (apiOutputCost !== null) {
     notes.push(`<strong>CE-006 Breakeven:</strong> At 50% utilization ($${monthlyGpuCost.toFixed(0)}/mo GPU cost), need ${breakevenTokensPerMonth >= 1e9 ? (breakevenTokensPerMonth/1e9).toFixed(1)+'B' : (breakevenTokensPerMonth/1e6).toFixed(1)+'M'} output tok/mo to beat ${apiProvider} API pricing ($${apiOutputCost.toFixed(2)}/1M output).`);
   }
+  // CE-007 note
+  notes.push(`<strong>CE-007 ${servingEngine.toUpperCase()}:</strong> KV waste ${(engineCfg.kvWaste*100).toFixed(0)}% (saves ${kvWasteSavingsPct.toFixed(1)}% vs raw), prefill ${(engineCfg.prefillEff*100).toFixed(0)}% eff, batch ${batchEfficiencyPct.toFixed(0)}% eff. Paged attention blocks: ${vllmBlockSize} tok, block waste ${(blockWasteRate*100).toFixed(1)}%.`);
   document.getElementById('notes').innerHTML = notes.join('<br>');
 
   updateArchFields();
@@ -737,6 +760,11 @@ function getConfig() {
     ppSize: document.getElementById('ppSize').value,
     cloudProvider: document.getElementById('cloudProvider').value,
     apiProvider: document.getElementById('apiProvider').value,
+    // CE-007: Serving engine config
+    servingEngine: document.getElementById('servingEngine').value,
+    vllmBlockSize: document.getElementById('vllmBlockSize').value,
+    vllmMaxNumBatchedTokens: document.getElementById('vllmMaxNumBatchedTokens').value,
+    vllmMaxNumSeqs: document.getElementById('vllmMaxNumSeqs').value,
   };
 }
 
