@@ -26,7 +26,7 @@
 - [x] **CE-012**: Expert placement for MoE (EP — expert parallelism) — c1657a9
 
 ## Phase 5: Throughput Modeling
-- [ ] **CE-013**: Prefill throughput (tokens/sec) separate from decode throughput
+- [x] **CE-013**: Prefill throughput (tokens/sec) separate from decode throughput — 8eb7791
 - [ ] **CE-014**: Time-to-first-token (TTFT) estimate based on prompt length
 - [ ] **CE-015**: Speculative decoding throughput boost estimates
 - [ ] **CE-016**: Concurrent user modeling (requests/sec at target latency)
@@ -295,3 +295,12 @@
 - Completed CE-011 GitReins task_complete (worker timed out at 600s after committing)
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s, Judge=tier2-null (HTML project, no tests)
+
+**CE-013 update (20:56 UTC):** CE-013 dispatched + completed (worker, commit 8eb7791, +47 net lines, 1399 lines total)
+- GPU_SPECS: added tflops_bf16 to all 8 GPUs (H100=990, H200=990, B200=2250, A100-80=312, A100-40=312, L40S=362, MI300X=1300, RTX6000=91)
+- New Prefill Throughput card: promptLen slider (128-131072), prefillComputeEff slider (0-1), prefillBatchSize (1-128)
+- Compute-bound prefill model: tflops × 1e12 / (2 × effParams × 1e9 × quantBpw/8 / tp) × prefillComputeEff × engine.prefillEff
+- Results: rPrefillThroughput (tok/s), rDecodeThroughput (tok/s), rPrefillLatency (TTFT ms)
+- getConfig/setConfig: promptLen, prefillComputeEff, prefillBatchSize
+- GitReins: tier1 PASS
+- 8 tasks remain: CE-014/015/016 (Phase 5), CE-017–CE-021 (Phase 6)
