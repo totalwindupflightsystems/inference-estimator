@@ -376,6 +376,23 @@
     <div class="notes" id="engineNotes">vLLM with paged attention — KV waste reduced from 30% to 15% vs raw</div>
   </div>
 
+  <!-- CE-013: Prefill Throughput Card -->
+  <div class="card">
+    <h2>Prefill Throughput (CE-013)</h2>
+    <div class="field">
+      <label>Prompt Length (tokens) <span class="slider-val" id="promptLenLabel">4096</span></label>
+      <input type="range" id="promptLen" value="4096" min="128" max="131072" step="128" oninput="document.getElementById('promptLenLabel').textContent=parseInt(this.value).toLocaleString();recalculate()">
+    </div>
+    <div class="field">
+      <label>Prefill Compute Efficiency <span class="slider-val" id="prefillEffLabel">0.50</span></label>
+      <input type="range" id="prefillComputeEff" value="0.50" min="0" max="1" step="0.05" oninput="document.getElementById('prefillEffLabel').textContent=parseFloat(this.value).toFixed(2);recalculate()">
+    </div>
+    <div class="field">
+      <label>Prefill Batch Size (requests)</label>
+      <input type="number" id="prefillBatchSize" value="1" min="1" max="128" onchange="recalculate()">
+    </div>
+  </div>
+
   <div class="card">
     <h2>Cloud Pricing</h2>
     <div class="field">
@@ -442,6 +459,10 @@
     <div class="metric"><div class="value" id="rCostOutput">—</div><div class="label">Output Cost $/1M tok (CE-005)</div></div>
     <!-- CE-006: Breakeven metric -->
     <div class="metric"><div class="value" id="rBreakeven">—</div><div class="label">Breakeven tok/mo (CE-006)</div></div>
+    <!-- CE-013: Prefill throughput metrics -->
+    <div class="metric"><div class="value" id="rPrefillThroughput">—</div><div class="label">Prefill Throughput tok/s (CE-013)</div></div>
+    <div class="metric"><div class="value" id="rDecodeThroughput">—</div><div class="label">Decode Throughput tok/s (CE-013)</div></div>
+    <div class="metric"><div class="value" id="rPrefillLatency">—</div><div class="label">Prefill Latency ms (CE-013)</div></div>
     <!-- CE-007: Serving engine overhead metrics -->
     <div class="metric"><div class="value" id="rEffectiveThroughput">—</div><div class="label">Eff. Throughput tok/s (CE-007)</div></div>
     <div class="metric"><div class="value" id="rKvWastePct">—</div><div class="label">KV Waste % (CE-007)</div></div>
@@ -466,15 +487,16 @@
 </div>
 
 <script>
+// CE-013: tflops_bf16 = BF16/FP16 tensor performance for compute-bound prefill estimates
 const GPU_SPECS = {
-  'H100-80':   { vram: 80,  bw: 3350, name: 'H100 80GB', price_hour: 2.50 },
-  'H200-141':  { vram: 141, bw: 4800, name: 'H200 141GB', price_hour: 3.50 },
-  'B200-192':  { vram: 192, bw: 8000, name: 'B200 192GB', price_hour: 4.50 },
-  'A100-80':   { vram: 80,  bw: 2000, name: 'A100 80GB', price_hour: 1.80 },
-  'A100-40':   { vram: 40,  bw: 1555, name: 'A100 40GB', price_hour: 1.20 },
-  'L40S-48':   { vram: 48,  bw: 864,  name: 'L40S 48GB', price_hour: 1.10 },
-  'MI300X-192':{ vram: 192, bw: 5300, name: 'MI300X 192GB', price_hour: 3.00 },
-  'RTX6000-48':{ vram: 48,  bw: 960,  name: 'RTX 6000 Ada 48GB', price_hour: 0.80 },
+  'H100-80':   { vram: 80,  bw: 3350, name: 'H100 80GB', price_hour: 2.50, tflops_bf16: 990 },
+  'H200-141':  { vram: 141, bw: 4800, name: 'H200 141GB', price_hour: 3.50, tflops_bf16: 990 },
+  'B200-192':  { vram: 192, bw: 8000, name: 'B200 192GB', price_hour: 4.50, tflops_bf16: 2250 },
+  'A100-80':   { vram: 80,  bw: 2000, name: 'A100 80GB', price_hour: 1.80, tflops_bf16: 312 },
+  'A100-40':   { vram: 40,  bw: 1555, name: 'A100 40GB', price_hour: 1.20, tflops_bf16: 312 },
+  'L40S-48':   { vram: 48,  bw: 864,  name: 'L40S 48GB', price_hour: 1.10, tflops_bf16: 362 },
+  'MI300X-192':{ vram: 192, bw: 5300, name: 'MI300X 192GB', price_hour: 3.00, tflops_bf16: 1300 },
+  'RTX6000-48':{ vram: 48,  bw: 960,  name: 'RTX 6000 Ada 48GB', price_hour: 0.80, tflops_bf16: 91 },
 };
 
 // CE-010: NVLink topology bandwidth models (GB/s)
@@ -605,7 +627,7 @@ const MODEL_PRESETS = {
 
 function getGpuSpec() {
   const sel = document.getElementById('gpuModel').value;
-  if (sel === 'custom') return { vram: parseFloat(document.getElementById('customVram').value) || 80, bw: 2000, name: 'Custom', price_hour: 2.00 };
+  if (sel === 'custom') return { vram: parseFloat(document.getElementById('customVram').value) || 80, bw: 2000, name: 'Custom', price_hour: 2.00, tflops_bf16: 312 };
   return GPU_SPECS[sel] || GPU_SPECS['H100-80'];
 }
 
@@ -727,6 +749,11 @@ function recalculate() {
   const tp = parseInt(document.getElementById('tpSize').value);
   const pp = parseInt(document.getElementById('ppSize').value);
   const gpu = getGpuSpec();
+
+  // CE-013: Prefill throughput fields
+  const promptLen = parseInt(document.getElementById('promptLen').value) || 4096;
+  const prefillComputeEff = parseFloat(document.getElementById('prefillComputeEff').value) || 0.5;
+  const prefillBatchSize = parseInt(document.getElementById('prefillBatchSize').value) || 1;
 
   // CE-010: NVLink topology bandwidth fields
   const nvlinkTopo = document.getElementById('nvlinkTopo').value;
@@ -982,11 +1009,16 @@ function recalculate() {
     : gpu.price_hour;
   const clusterCostPerHour = cloudPricePerGpu * gpusNeeded;
 
-  // CE-005: Cost-per-1M-tokens calculations
-  // Prefill is compute-bound (~50% of memory BW efficiency for compute)
-  const prefillTokensPerSec = (gpu.bw * 1e9) / (effParams * 1e9 * (quantBpw / 8) / tp) * 0.5;
-  // CE-007: Apply engine prefill efficiency (chunked prefill savings)
-  const effectivePrefillTps = prefillTokensPerSec / engineCfg.prefillEff;
+  // CE-013: Compute-bound prefill throughput (tokens/sec per GPU)
+  // Prefill is compute-bound: 2 FLOP per parameter per token (1 multiply + 1 accumulate)
+  // raw_prefill_tps = tflops_bf16 * 1e12 / (2 * effParams * 1e9 * quantBpw/8 / tp)
+  const gpuTflops = (gpu.tflops_bf16 || 990); // default to H100 if missing
+  const computePrefillTps = (gpuTflops * 1e12) / (2 * effParams * 1e9 * (quantBpw / 8) / tp) * prefillComputeEff;
+  // CE-007: Apply engine prefill efficiency on top of compute-bound estimate
+  const effectivePrefillTps = computePrefillTps * engineCfg.prefillEff;
+
+  // CE-005: Cost-per-1M-tokens calculations (using compute-bound prefill)
+  const prefillTokensPerSec = effectivePrefillTps;
   // cost_per_1M_input = (1M tokens / prefill_tok_per_sec / 3600 sec/hr) * price_per_gpu * gpus
   const costPer1MInput = prefillTokensPerSec > 0
     ? ((1_000_000 / prefillTokensPerSec / 3600) * cloudPricePerGpu * gpusNeeded)
@@ -1076,6 +1108,12 @@ function recalculate() {
   // Update API model list highlighting
   updateApiModelList();
 
+  // CE-013: Prefill throughput metrics
+  const prefillLatencyMs = effectivePrefillTps > 0 ? (promptLen * prefillBatchSize / effectivePrefillTps * 1000) : 0;
+  document.getElementById('rPrefillThroughput').textContent = effectivePrefillTps.toFixed(0) + ' tok/s';
+  document.getElementById('rDecodeThroughput').textContent = effectiveDecodeThroughput.toFixed(0) + ' tok/s';
+  document.getElementById('rPrefillLatency').textContent = prefillLatencyMs.toFixed(1) + ' ms';
+
   // CE-007: Engine overhead metrics
   document.getElementById('rEffectiveThroughput').textContent = effectiveDecodeThroughput.toFixed(0) + ' tok/s';
   document.getElementById('rKvWastePct').textContent = effectiveKvWaste === rawKvWaste ? '0% (baseline)' : (effectiveKvWaste * 100).toFixed(1) + '%';
@@ -1127,6 +1165,8 @@ function recalculate() {
   if (tp > 1) notes.push(`<strong>TP=${tp}:</strong> Model sharded across ${tp} GPUs. Per-GPU model: ${modelPerGpuGB.toFixed(1)} GB.`);
   if (ctxLen > 131072) notes.push(`<strong>Long context:</strong> KV cache dominates at ${kvEngineOverhead.toFixed(0)} GB. Consider FP8 KV cache precision.`);
   notes.push(`<strong>Memory BW limit:</strong> ~${memBwTokensPerSec.toFixed(0)} tok/s raw, ~${effectiveDecodeThroughput.toFixed(0)} tok/s effective with ${servingEngine} engine.`);
+  // CE-013: Prefill throughput note
+  notes.push(`<strong>CE-013 Prefill:</strong> Compute-bound ~${effectivePrefillTps.toFixed(0)} tok/s (${gpuTflops} TFLOPS BF16, eff ${(prefillComputeEff*100).toFixed(0)}%). Prompt ${promptLen.toLocaleString()} tok × ${prefillBatchSize} batch = ${prefillLatencyMs.toFixed(1)} ms TTFT. Decode: ~${effectiveDecodeThroughput.toFixed(0)} tok/s memory-BW bound.`);
   // CE-005 note
   notes.push(`<strong>CE-005 Costs:</strong> Input $${costPer1MInput.toFixed(2)}/1M tok (prefill ~${prefillTokensPerSec.toFixed(0)} tok/s), Output $${costPer1MOutput.toFixed(2)}/1M tok (decode ~${memBwTokensPerSec.toFixed(0)} tok/s). Assumes 100% utilization.`);
   // CE-006 note
@@ -1248,6 +1288,10 @@ function getConfig() {
     ncclAllReduceLatencyUs: document.getElementById('ncclAllReduceLatencyUs').value,
     ncclBwUtil: document.getElementById('ncclBwUtil').value,
     pipelineBubblePct: document.getElementById('pipelineBubblePct').value,
+    // CE-013: Prefill throughput config
+    promptLen: document.getElementById('promptLen').value,
+    prefillComputeEff: document.getElementById('prefillComputeEff').value,
+    prefillBatchSize: document.getElementById('prefillBatchSize').value,
   };
 }
 
@@ -1272,6 +1316,9 @@ function setConfig(cfg) {
   document.getElementById('nvlinkInterLabel').textContent = cfg.nvlinkInterNodeBw || 50;
   // CE-011: Update NCCL BW util label
   document.getElementById('ncclBwUtilLabel').textContent = parseFloat(cfg.ncclBwUtil || 0.80).toFixed(2);
+  // CE-013: Update prefill labels
+  document.getElementById('promptLenLabel').textContent = parseInt(cfg.promptLen || 4096).toLocaleString();
+  document.getElementById('prefillEffLabel').textContent = parseFloat(cfg.prefillComputeEff || 0.50).toFixed(2);
   recalculate();
 }
 
