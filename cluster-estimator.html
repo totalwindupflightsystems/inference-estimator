@@ -395,6 +395,42 @@
     <div class="notes" id="queuingFactorNote" style="margin-top:8px;font-weight:600"></div>
   </div>
 
+  <!-- CE-015: Speculative Decoding Card -->
+  <div class="card">
+    <h2>Speculative Decoding (CE-015)</h2>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="enableSpec" checked onchange="recalculate()">
+        Enable Speculative Decoding
+      </label>
+    </div>
+    <div id="specDecodingFields">
+      <div class="field">
+        <label>Draft Tokens per Step</label>
+        <input type="number" id="specDraftTokens" value="3" min="1" max="10" onchange="recalculate()">
+      </div>
+      <div class="field">
+        <label>Acceptance Rate <span class="slider-val" id="specAcceptRateLabel">0.80</span></label>
+        <input type="range" id="specAcceptRate" value="0.80" min="0" max="1" step="0.05" oninput="document.getElementById('specAcceptRateLabel').textContent=parseFloat(this.value).toFixed(2);recalculate()">
+      </div>
+      <div class="field">
+        <label>Draft:Target Size Ratio <span class="slider-val" id="specDraftRatioLabel">0.10</span></label>
+        <input type="range" id="specDraftRatio" value="0.10" min="0.01" max="0.50" step="0.01" oninput="document.getElementById('specDraftRatioLabel').textContent=parseFloat(this.value).toFixed(2);recalculate()">
+      </div>
+      <div class="field">
+        <label>Draft Overhead <span class="slider-val" id="specDraftOverheadLabel">0.15</span></label>
+        <input type="range" id="specDraftOverhead" value="0.15" min="0" max="0.50" step="0.01" oninput="document.getElementById('specDraftOverheadLabel').textContent=parseFloat(this.value).toFixed(2);recalculate()">
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="specSharedGPU" checked onchange="recalculate()">
+          Draft model shares GPU with target
+        </label>
+      </div>
+    </div>
+    <div class="notes" id="specDecodingNote">Boost: decode_tps × (1 + acceptance × draft_tokens) / (1 + overhead)</div>
+  </div>
+
   <div class="card">
     <h2>Cloud Pricing</h2>
     <div class="field">
@@ -469,6 +505,11 @@
     <div class="metric"><div class="value" id="rTTFT">—</div><div class="label">TTFT ms (CE-014)</div></div>
     <div class="metric"><div class="value" id="rTTFTBatched">—</div><div class="label">TTFT Batched ms (CE-014)</div></div>
     <div class="metric"><div class="value" id="rTtftReady">—</div><div class="label">Ready-to-Serve ms (CE-014)</div></div>
+    <!-- CE-015: Speculative decoding metrics -->
+    <div class="metric"><div class="value" id="rSpecDecodeThroughput">—</div><div class="label">Spec. Decode Tput tok/s (CE-015)</div></div>
+    <div class="metric"><div class="value" id="rSpecSpeedup">—</div><div class="label">Speedup vs Baseline (CE-015)</div></div>
+    <div class="metric"><div class="value" id="rSpecDraftMem">—</div><div class="label">Draft Model Mem GB (CE-015)</div></div>
+    <div class="metric"><div class="value" id="rSpecAcceptance">—</div><div class="label">Acceptance Rate (CE-015)</div></div>
     <!-- CE-007: Serving engine overhead metrics -->
     <div class="metric"><div class="value" id="rEffectiveThroughput">—</div><div class="label">Eff. Throughput tok/s (CE-007)</div></div>
     <div class="metric"><div class="value" id="rKvWastePct">—</div><div class="label">KV Waste % (CE-007)</div></div>
@@ -619,6 +660,16 @@ const SCALING_EFFICIENCY = {
   scalingEfficiencyCurve: { 1: 1.0, 2: 0.95, 4: 0.88, 8: 0.78, 16: 0.65, 32: 0.50, 64: 0.35, 128: 0.22 },
 };
 
+// CE-015: Speculative Decoding throughput boost estimates
+const SPECULATIVE_DECODING = {
+  draftTokensPerStep: 3,       // typical: 3-5 tokens per draft step
+  draftModelRatio: 0.10,       // draft model is ~10% the size of target (e.g. 7B draft for 70B target)
+  acceptanceRate: 0.80,        // typical: 70-90% acceptance
+  draftOverhead: 0.15,         // latency overhead of running the draft model
+  sharedGPU: true,             // whether draft model shares GPU with target or needs separate GPU
+  boostFormula: "decode_tps * (1 + acceptanceRate * draftTokensPerStep) / (1 + draftOverhead)",
+};
+
 const MODEL_PRESETS = {
   'llama-3-70b':      { name: 'Llama 3 70B',       params: 70,  arch: 'dense', nLayers: 80,  nKvHeads: 8, headDim: 128, hiddenSize: 8192,  desc: 'Meta Llama 3 — 70B dense, 80 layers, GQA (8 KV heads), 128 head dim' },
   'llama-4-400b-moe':  { name: 'Llama 4 400B (MoE)', params: 400, arch: 'moe',  activeParams: 40,   nLayers: 126, nKvHeads: 8, headDim: 128, hiddenSize: 16384, desc: 'Meta Llama 4 Behemoth — 400B total, ~40B active, 16 experts, 126 layers' },
@@ -760,6 +811,14 @@ function recalculate() {
   const promptLen = parseInt(document.getElementById('promptLen').value) || 4096;
   const prefillComputeEff = parseFloat(document.getElementById('prefillComputeEff').value) || 0.5;
   const prefillBatchSize = parseInt(document.getElementById('prefillBatchSize').value) || 1;
+
+  // CE-015: Speculative decoding fields
+  const enableSpec = document.getElementById('enableSpec').checked;
+  const specDraftTokens = parseInt(document.getElementById('specDraftTokens').value) || SPECULATIVE_DECODING.draftTokensPerStep;
+  const specAcceptRate = parseFloat(document.getElementById('specAcceptRate').value) || SPECULATIVE_DECODING.acceptanceRate;
+  const specDraftRatio = parseFloat(document.getElementById('specDraftRatio').value) || SPECULATIVE_DECODING.draftModelRatio;
+  const specDraftOverhead = parseFloat(document.getElementById('specDraftOverhead').value) || SPECULATIVE_DECODING.draftOverhead;
+  const specSharedGPU = document.getElementById('specSharedGPU').checked;
 
   // CE-010: NVLink topology bandwidth fields
   const nvlinkTopo = document.getElementById('nvlinkTopo').value;
@@ -1134,6 +1193,35 @@ function recalculate() {
   document.getElementById('rTtftReady').textContent = Math.round(rTtftReady).toLocaleString() + ' ms';
   document.getElementById('queuingFactorNote').innerHTML = '<strong>CE-014 Batch Queuing Factor:</strong> ' + batchQueuingFactor.toFixed(2) + '× (at ' + prefillBatchSize + ' concurrent prefill requests)';
 
+  // CE-015: Speculative decoding throughput boost
+  let specDecodeThroughput = effectiveDecodeThroughput;
+  let specSpeedup = 1.0;
+  let draftModelMemGB = 0;
+  let specDisplayRate = 0;
+  if (enableSpec) {
+    // boostFactor = (1 + acceptance * draft_tokens_per_step) / (1 + draft_overhead)
+    const boostFactor = (1 + specAcceptRate * specDraftTokens) / (1 + specDraftOverhead);
+    specDecodeThroughput = effectiveDecodeThroughput * boostFactor;
+    specSpeedup = boostFactor;
+    specDisplayRate = specAcceptRate;
+    // Draft model memory: same quant and overhead scaling as target model
+    draftModelMemGB = modelWithOverhead * specDraftRatio;
+    if (!specSharedGPU) {
+      // If draft model uses separate GPU, add to total VRAM requirement
+      // This doesn't change existing per-GPU calculations but is reported separately
+    }
+    document.getElementById('specDecodingNote').innerHTML = '<strong>CE-015 Boost:</strong> effective = decode_tps × (1 + ' + specAcceptRate.toFixed(2) + ' × ' + specDraftTokens + ') / (1 + ' + specDraftOverhead.toFixed(2) + ') = ' + effectiveDecodeThroughput.toFixed(0) + ' × ' + boostFactor.toFixed(2) + ' = <strong style=\"color:var(--accent2)\">' + specDecodeThroughput.toFixed(0) + ' tok/s</strong> (speedup ' + specSpeedup.toFixed(2) + '×)';
+    if (draftModelMemGB > 0) {
+      document.getElementById('specDecodingNote').innerHTML += '<br>Draft model: ~' + draftModelMemGB.toFixed(1) + ' GB VRAM (' + (specDraftRatio * 100).toFixed(0) + '% of target, ' + (specSharedGPU ? 'shared GPU' : 'separate GPU') + ').';
+    }
+  } else {
+    document.getElementById('specDecodingNote').innerHTML = '<strong>CE-015:</strong> Speculative decoding disabled. Enable to estimate throughput boost from draft model acceleration.';
+  }
+  document.getElementById('rSpecDecodeThroughput').textContent = enableSpec ? specDecodeThroughput.toFixed(0) + ' tok/s' : 'N/A (disabled)';
+  document.getElementById('rSpecSpeedup').textContent = enableSpec ? specSpeedup.toFixed(2) + '×' : 'N/A';
+  document.getElementById('rSpecDraftMem').textContent = enableSpec ? draftModelMemGB.toFixed(1) + ' GB' : 'N/A';
+  document.getElementById('rSpecAcceptance').textContent = enableSpec ? (specDisplayRate * 100).toFixed(0) + '%' : 'N/A';
+
   // CE-007: Engine overhead metrics
   document.getElementById('rEffectiveThroughput').textContent = effectiveDecodeThroughput.toFixed(0) + ' tok/s';
   document.getElementById('rKvWastePct').textContent = effectiveKvWaste === rawKvWaste ? '0% (baseline)' : (effectiveKvWaste * 100).toFixed(1) + '%';
@@ -1229,6 +1317,10 @@ function recalculate() {
   if (numServers > 1) {
     notes.push(`<strong>CE-011 Multi-Node Scaling:</strong> ${numServers} nodes — scaling efficiency ${(scalingEfficiency*100).toFixed(1)}% (${scalingModel} model). All-reduce penalty ${(allReducePenalty*100).toFixed(1)}%, pipeline bubble ${(pipelineBubblePenalty*100).toFixed(1)}%. Eff. throughput: ${(effectiveDecodeThroughput*scalingEfficiency).toFixed(0)} tok/s.`);
   }
+  // CE-015: Speculative decoding note
+  if (enableSpec) {
+    notes.push(`<strong>CE-015 Speculative Decoding:</strong> ${specDraftTokens} draft tokens/step, ${(specAcceptRate*100).toFixed(0)}% acceptance, ${(specDraftRatio*100).toFixed(0)}% draft:target ratio, ${(specDraftOverhead*100).toFixed(0)}% overhead. Boost: ${specSpeedup.toFixed(2)}× → ${specDecodeThroughput.toFixed(0)} tok/s effective decode. Draft model ~${draftModelMemGB.toFixed(1)} GB (${specSharedGPU ? 'shared GPU' : 'separate GPU'}). Formula: (1 + α·k) / (1 + δ).`);
+  }
   document.getElementById('notes').innerHTML = notes.join('<br>');
 
   updateArchFields();
@@ -1239,6 +1331,8 @@ function recalculate() {
   document.getElementById('sglangFields').style.display = servingEngine === 'sglang' ? '' : 'none';
   // CE-009: Show/hide TGI-specific fields
   document.getElementById('tgiFields').style.display = servingEngine === 'tgi' ? '' : 'none';
+  // CE-015: Show/hide speculative decoding fields
+  document.getElementById('specDecodingFields').style.display = enableSpec ? '' : 'none';
   // CE-007/CE-009: Update engine notes dynamically
   const engineNotesMap = {
     raw: 'Raw GPU — no serving engine overhead. KV waste ~30% (no paged attention).',
@@ -1312,13 +1406,23 @@ function getConfig() {
     promptLen: document.getElementById('promptLen').value,
     prefillComputeEff: document.getElementById('prefillComputeEff').value,
     prefillBatchSize: document.getElementById('prefillBatchSize').value,
+    // CE-015: Speculative decoding config
+    enableSpec: document.getElementById('enableSpec').checked,
+    specDraftTokens: document.getElementById('specDraftTokens').value,
+    specAcceptRate: document.getElementById('specAcceptRate').value,
+    specDraftRatio: document.getElementById('specDraftRatio').value,
+    specDraftOverhead: document.getElementById('specDraftOverhead').value,
+    specSharedGPU: document.getElementById('specSharedGPU').checked,
   };
 }
 
 function setConfig(cfg) {
   for (const [k, v] of Object.entries(cfg)) {
     const el = document.getElementById(k);
-    if (el) el.value = v;
+    if (el) {
+      if (el.type === 'checkbox') el.checked = v;
+      else el.value = v;
+    }
   }
   updateGpuSpecs();
   updateArchFields();
@@ -1339,6 +1443,10 @@ function setConfig(cfg) {
   // CE-013: Update prefill labels
   document.getElementById('promptLenLabel').textContent = parseInt(cfg.promptLen || 4096).toLocaleString();
   document.getElementById('prefillEffLabel').textContent = parseFloat(cfg.prefillComputeEff || 0.50).toFixed(2);
+  // CE-015: Update speculative decoding labels
+  document.getElementById('specAcceptRateLabel').textContent = parseFloat(cfg.specAcceptRate || 0.80).toFixed(2);
+  document.getElementById('specDraftRatioLabel').textContent = parseFloat(cfg.specDraftRatio || 0.10).toFixed(2);
+  document.getElementById('specDraftOverheadLabel').textContent = parseFloat(cfg.specDraftOverhead || 0.15).toFixed(2);
   recalculate();
 }
 
