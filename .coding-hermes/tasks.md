@@ -33,7 +33,7 @@
 
 ## Phase 6: Polish
 - [x] **CE-017**: Dark/light theme toggle
-- [ ] **CE-018**: Shareable URL (encode config in URL hash)
+- [x] **CE-018**: Shareable URL (encode config in URL hash) — 61df637
 - [ ] **CE-019**: Comparison mode (side-by-side two configs)
 - [ ] **CE-020**: Print-friendly CSS
 - [ ] **CE-021**: Service Worker for offline use
@@ -435,5 +435,46 @@
   - GitReins: tier1 PASS (guard clean, secrets clean), task_complete applied
 - 4 tasks remain: CE-018 (URL), CE-019 (comparison), CE-020 (print), CE-021 (service worker)
 - CE-018 (shareable URL) ready for next productive tick
+
+**Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s, Judge=PASS (tier2-null for HTML project)
+## Tick #9 — 2026-07-31 03:10 UTC — CE-018 dispatched + completed (Phase 6: 2/5)
+
+**Ground Truth:**
+- Scheduler: CooldownS=900, DecayRate=0.0, Enabled=True, Weight=10, Priority=8, UpdatedAt=2026-07-30T21:09:01Z (API-verified via /api/v1/projects)
+- DuckBrain: 3 keys (`identity` + `tick/6` + `tick/8`), namespace `inference-estimator` — recall confirmed
+- GitReins: 22 tasks (CE-001 through CE-018 complete, CE-019 through CE-021 pending)
+- Workdir: Clean after CE-018 commit 61df637
+
+**NEVER-DONE Audit (14-gate sweep):**
+
+| Gate | Status | Detail |
+|------|--------|--------|
+| 0 Scheduler | ✅ | CooldownS=900, DecayRate=0.0, API-verified |
+| 1 Build | N/A | Static HTML |
+| 2 Tests | N/A | No test framework |
+| 3 Vet/Lint | N/A | Single HTML file |
+| 4 Formatter | N/A | Single file |
+| 5 TODOs/FIXMEs | ✅ | Zero in cluster-estimator.html (1690 lines) |
+| 6 Hilo | N/A | Static HTML — no supported source files |
+| 7 GitReins | ✅ | 22 tasks (18 complete, 3 pending, 1 newly complete), guard PASS |
+| 8 DuckBrain | ✅ | 3 keys, namespace active |
+| 9 CI | N/A | No GitHub Actions |
+| 10 Deps | N/A | Zero dependencies |
+| 11 Docs | ✅ | 9/9 — all community docs present |
+| 12 Middle-out | N/A | Not a Go project |
+| 13 E2E | ✅ | HTML: 1690 lines, 16 CE-018 refs, all 5 features present (encodeConfigToHash, decodeHashToConfig, hashUpdating, hashDebounceTimer, Copy Link), 12 feature constants |
+| 14 GitReins judge | ✅ | CE-018: tier1 PASS, tier2 null (HTML project — expected) |
+
+**Task Scan:**
+- CE-018 ✅ dispatched + completed (worker, commit 61df637, +51 lines, 1690 lines total)
+  - `encodeConfigToHash()`: JSON.stringify(getConfig()) → btoa() → window.location.hash
+  - `decodeHashToConfig()`: strips #, atob(), JSON.parse, setConfig()
+  - `hashUpdating` guard flag prevents infinite loop (hashchange → decode → recalculate → hash update)
+  - Debounced update (500ms) at end of recalculate()
+  - 🔗 Copy Link button with navigator.clipboard.writeText() + "✓ Copied!" 2s feedback
+  - hashchange event listener for back/forward navigation
+  - Hash takes priority over localStorage auto-load on page load
+- 3 tasks remain: CE-019 (comparison mode), CE-020 (print CSS), CE-021 (service worker)
+- CE-019 (comparison mode — side-by-side two configs) ready for next productive tick
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s, Judge=PASS (tier2-null for HTML project)

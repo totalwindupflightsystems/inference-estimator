@@ -58,6 +58,31 @@
   .api-model-row .model-price .out { color: var(--accent2); }
   .api-model-row.active { background: var(--bg); border-left: 2px solid var(--accent); }
   .api-model-row.active .model-name { color: var(--accent); font-weight: 600; }
+  /* CE-019: Comparison mode */
+  #compareContainer { display: none; flex-direction: row; gap: 16px; margin-bottom: 24px; }
+  #compareContainer.active { display: flex; }
+  .compare-pane { flex: 1; overflow-y: auto; max-height: calc(100vh - 140px); min-width: 0; }
+  .compare-pane .pane-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .compare-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 8px 12px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border); }
+  .compare-header h3 { font-size: 0.95rem; margin: 0; }
+  .compare-header .pane-badge { background: var(--accent); color: #000; padding: 2px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
+  .compare-pane .pane-btn-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+  .compare-pane .pane-btn-row button { font-size: 0.72rem; padding: 4px 10px; }
+  .diff-highlight input, .diff-highlight select { border-color: var(--warn) !important; background: color-mix(in srgb, var(--warn) 8%, var(--bg)) !important; }
+  .diff-highlight label { color: var(--warn) !important; }
+  .compare-pane .results { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-top: 12px; }
+  .compare-pane .metric { padding: 10px; }
+  .compare-pane .metric .value { font-size: 1.15rem; }
+  .compare-pane .card { padding: 14px; }
+  .compare-pane .card h2 { font-size: 0.78rem; margin-bottom: 10px; padding-bottom: 6px; }
+  .compare-pane .field { margin-bottom: 10px; }
+  .compare-pane .field input, .compare-pane .field select { padding: 6px 10px; font-size: 0.8rem; }
+  .compare-pane .notes { font-size: 0.7rem; margin-top: 10px; padding: 8px; }
+  .compare-results-header { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin: 16px 0 8px 0; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  @media (max-width: 900px) {
+    #compareContainer { flex-direction: column; }
+    .compare-pane { max-height: none; }
+  }
 </style>
 </head>
 <body data-theme="dark">
@@ -72,6 +97,7 @@
   <button onclick="loadConfig()">Load Saved</button>
   <button onclick="copyLink()">🔗 Copy Link</button>
   <button class="primary" onclick="recalculate()">Recalculate</button>
+  <button id="compareBtn" onclick="toggleCompareMode()">⚖ Compare</button>
   <button id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark theme">☀️ Light</button>
   <span class="status" id="status">Saved ✓</span>
 </div>
@@ -569,6 +595,32 @@
     <div class="metric"><div class="value" id="rEffectiveTputWithScaling">—</div><div class="label">Eff. Tput w/ Scaling tok/s (CE-011)</div></div>
   </div>
   <div class="notes" id="notes" style="margin-top:16px"></div>
+</div>
+
+<!-- CE-019: Comparison mode container -->
+<div id="compareContainer">
+  <div class="compare-pane" id="paneA">
+    <div class="compare-header"><h3><span class="pane-badge">Config A</span> Configuration</h3></div>
+    <div class="pane-btn-row">
+      <button onclick="paneImport('A')">📂 Import</button>
+      <button onclick="copyToPaneB()">📋 Copy to Pane B</button>
+    </div>
+    <div class="pane-grid" id="paneAGrid"></div>
+    <div class="compare-results-header">Results A</div>
+    <div class="results" id="paneAResults"></div>
+    <div class="notes" id="paneANotes"></div>
+  </div>
+  <div class="compare-pane" id="paneB">
+    <div class="compare-header"><h3><span class="pane-badge">Config B</span> Configuration</h3></div>
+    <div class="pane-btn-row">
+      <button onclick="paneImport('B')">📂 Import</button>
+      <button onclick="copyToPaneA()">📋 Copy to Pane A</button>
+    </div>
+    <div class="pane-grid" id="paneBGrid"></div>
+    <div class="compare-results-header">Results B</div>
+    <div class="results" id="paneBResults"></div>
+    <div class="notes" id="paneBNotes"></div>
+  </div>
 </div>
 
 <script>
@@ -1685,6 +1737,573 @@ if (window.location.hash && window.location.hash !== '#') {
 
 // CE-018: Listen for hash changes (back/forward navigation, shared links)
 window.addEventListener('hashchange', decodeHashToConfig);
+
+// ===== CE-019: Comparison mode =====
+let compareMode = false;
+
+function toggleCompareMode() {
+  const btn = document.getElementById('compareBtn');
+  const grid = document.querySelector('.grid');
+  const resultsCard = grid.nextElementSibling;
+  const cc = document.getElementById('compareContainer');
+
+  if (!compareMode) {
+    configA = getConfig();
+    grid.style.display = 'none';
+    if (resultsCard) resultsCard.style.display = 'none';
+    cc.style.display = 'flex';
+    cc.classList.add('active');
+
+    buildPane('A');
+    buildPane('B');
+    buildPaneResults('A');
+    buildPaneResults('B');
+
+    paneSetConfig('A', configA);
+    configB = JSON.parse(JSON.stringify(configA));
+    paneSetConfig('B', configB);
+
+    paneRecalculate('A');
+    paneRecalculate('B');
+
+    setupSyncedScroll();
+    diffCheck();
+
+    compareMode = true;
+    btn.textContent = '✕ Exit Compare';
+    btn.style.background = 'var(--warn)';
+    btn.style.color = '#000';
+  } else {
+    grid.style.display = '';
+    if (resultsCard) resultsCard.style.display = '';
+    cc.style.display = 'none';
+    cc.classList.remove('active');
+    recalculate();
+    compareMode = false;
+    btn.textContent = '⚖ Compare';
+    btn.style.background = '';
+    btn.style.color = '';
+  }
+}
+
+function buildPane(which) {
+  const grid = document.querySelector('.grid');
+  let html = grid.outerHTML;
+  html = html.replace(/id="([^"]+)"/g, (m, id) => (id.startsWith('A_') || id.startsWith('B_')) ? m : `id="${which}_${id}"`);
+  html = html.replace(/for="([^"]+)"/g, (m, id) => (id.startsWith('A_') || id.startsWith('B_')) ? m : `for="${which}_${id}"`);
+  html = html.replace(/(on\w+)="([^"]*)"/g, (m, evt, handler) => {
+    let h = handler;
+    h = h.replace(/getElementById\('([^']+)'\)/g, (m2, id) => (id.startsWith('A_') || id.startsWith('B_')) ? m2 : `getElementById('${which}_${id}')`);
+    h = h.replace(/\brecalculate\(\)/g, `paneRecalculate('${which}')`);
+    h = h.replace(/\bupdateGpuSpecs\(\)/g, `paneUpdateGpuSpecs('${which}')`);
+    h = h.replace(/\bupdateCloudPricing\(\)/g, `paneUpdateCloudPricing('${which}')`);
+    h = h.replace(/\bfilterPresets\(\)/g, `paneFilterPresets('${which}')`);
+    h = h.replace(/\bapplyPreset\(\)/g, `paneApplyPreset('${which}')`);
+    h = h.replace(/\bupdateNvlinkTopo\(\)/g, `paneUpdateNvlinkTopo('${which}')`);
+    h = h.replace(/\bupdateApiModelList\(\)/g, `paneUpdateApiModelList('${which}')`);
+    h = h.replace(/\bupdateArchFields\(\)/g, `paneUpdateArchFields('${which}')`);
+    return `${evt}="${h}"`;
+  });
+  document.getElementById(`pane${which}Grid`).innerHTML = html;
+}
+
+function buildPaneResults(which) {
+  const rc = document.getElementById('resultsContainer');
+  let html = rc.outerHTML;
+  html = html.replace(/id="([^"]+)"/g, (m, id) => (id.startsWith('A_') || id.startsWith('B_')) ? m : `id="${which}_${id}"`);
+  document.getElementById(`pane${which}Results`).innerHTML = html;
+}
+
+function pe(which, id) { return document.getElementById(which + '_' + id); }
+
+function paneGetConfig(which) {
+  return {
+    params: pe(which,'params').value, arch: pe(which,'arch').value, activeParams: pe(which,'activeParams').value,
+    nLayers: pe(which,'nLayers').value, nKvHeads: pe(which,'nKvHeads').value, headDim: pe(which,'headDim').value,
+    hiddenSize: pe(which,'hiddenSize').value, quant: pe(which,'quant').value, kvPrecision: pe(which,'kvPrecision').value,
+    context: pe(which,'context').value, batchSize: pe(which,'batchSize').value, overhead: pe(which,'overhead').value,
+    gpuModel: pe(which,'gpuModel').value, customVram: pe(which,'customVram').value, gpuPerServer: pe(which,'gpuPerServer').value,
+    numServers: pe(which,'numServers').value, servingMode: pe(which,'servingMode').value, tpSize: pe(which,'tpSize').value,
+    ppSize: pe(which,'ppSize').value, cloudProvider: pe(which,'cloudProvider').value, apiProvider: pe(which,'apiProvider').value,
+    servingEngine: pe(which,'servingEngine').value, vllmBlockSize: pe(which,'vllmBlockSize').value,
+    vllmMaxNumBatchedTokens: pe(which,'vllmMaxNumBatchedTokens').value, vllmMaxNumSeqs: pe(which,'vllmMaxNumSeqs').value,
+    tgiMaxBatchSize: pe(which,'tgiMaxBatchSize').value, tgiMaxWaitingSeqs: pe(which,'tgiMaxWaitingSeqs').value,
+    tgiMaxTotalTokens: pe(which,'tgiMaxTotalTokens').value, sglangCacheHitRate: pe(which,'sglangCacheHitRate').value,
+    sglangPrefixCacheSize: pe(which,'sglangPrefixCacheSize').value, sglangRadixTreeOverhead: pe(which,'sglangRadixTreeOverhead').value,
+    numExperts: pe(which,'numExperts').value, topK: pe(which,'topK').value, epSize: pe(which,'epSize').value,
+    allToAllOverhead: pe(which,'allToAllOverhead').value, loadBalancePenalty: pe(which,'loadBalancePenalty').value,
+    nvlinkTopo: pe(which,'nvlinkTopo').value, nvlinkIntraNodeBw: pe(which,'nvlinkIntraNodeBw').value,
+    nvlinkInterNodeBw: pe(which,'nvlinkInterNodeBw').value, tpCrossNode: pe(which,'tpCrossNode').value,
+    ppCrossNode: pe(which,'ppCrossNode').value, scalingModel: pe(which,'scalingModel').value,
+    ncclAllReduceLatencyUs: pe(which,'ncclAllReduceLatencyUs').value, ncclBwUtil: pe(which,'ncclBwUtil').value,
+    pipelineBubblePct: pe(which,'pipelineBubblePct').value, promptLen: pe(which,'promptLen').value,
+    prefillComputeEff: pe(which,'prefillComputeEff').value, prefillBatchSize: pe(which,'prefillBatchSize').value,
+    enableSpec: pe(which,'enableSpec').checked, specDraftTokens: pe(which,'specDraftTokens').value,
+    specAcceptRate: pe(which,'specAcceptRate').value, specDraftRatio: pe(which,'specDraftRatio').value,
+    specDraftOverhead: pe(which,'specDraftOverhead').value, specSharedGPU: pe(which,'specSharedGPU').checked,
+    maxConcurrentUsers: pe(which,'maxConcurrentUsers').value, targetP50Latency: pe(which,'targetP50Latency').value,
+    targetP95Latency: pe(which,'targetP95Latency').value, queueDepthMultiplier: pe(which,'queueDepthMultiplier').value,
+    bandwidthUtilizationLimit: pe(which,'bandwidthUtilizationLimit').value,
+  };
+}
+
+function paneSetConfig(which, cfg) {
+  for (const [k, v] of Object.entries(cfg)) {
+    const elem = pe(which, k);
+    if (elem) { if (elem.type === 'checkbox') elem.checked = v; else elem.value = v; }
+  }
+  paneUpdateGpuSpecs(which);
+  paneUpdateArchFields(which);
+  if (pe(which,'ctxLabel')) pe(which,'ctxLabel').textContent = parseInt(cfg.context || 32768).toLocaleString();
+  if (pe(which,'gpuPerLabel')) pe(which,'gpuPerLabel').textContent = cfg.gpuPerServer || 8;
+  if (pe(which,'serverLabel')) pe(which,'serverLabel').textContent = cfg.numServers || 1;
+  if (pe(which,'quantLabel')) { const qs = pe(which,'quant'); qs.value = cfg.quant; pe(which,'quantLabel').textContent = qs.selectedOptions[0]?.text || ''; }
+  if (pe(which,'archLabel')) pe(which,'archLabel').textContent = (cfg.arch || 'dense') === 'moe' ? 'MoE' : 'Dense';
+  if (pe(which,'sglangHitLabel')) pe(which,'sglangHitLabel').textContent = parseFloat(cfg.sglangCacheHitRate || 0.5).toFixed(2);
+  if (pe(which,'epLabel')) pe(which,'epLabel').textContent = cfg.epSize || 1;
+  if (pe(which,'loadBalLabel')) pe(which,'loadBalLabel').textContent = (cfg.loadBalancePenalty || 10) + '%';
+  if (pe(which,'nvlinkIntraLabel')) pe(which,'nvlinkIntraLabel').textContent = cfg.nvlinkIntraNodeBw || 900;
+  if (pe(which,'nvlinkInterLabel')) pe(which,'nvlinkInterLabel').textContent = cfg.nvlinkInterNodeBw || 50;
+  if (pe(which,'ncclBwUtilLabel')) pe(which,'ncclBwUtilLabel').textContent = parseFloat(cfg.ncclBwUtil || 0.80).toFixed(2);
+  if (pe(which,'promptLenLabel')) pe(which,'promptLenLabel').textContent = parseInt(cfg.promptLen || 4096).toLocaleString();
+  if (pe(which,'prefillEffLabel')) pe(which,'prefillEffLabel').textContent = parseFloat(cfg.prefillComputeEff || 0.50).toFixed(2);
+  if (pe(which,'specAcceptRateLabel')) pe(which,'specAcceptRateLabel').textContent = parseFloat(cfg.specAcceptRate || 0.80).toFixed(2);
+  if (pe(which,'specDraftRatioLabel')) pe(which,'specDraftRatioLabel').textContent = parseFloat(cfg.specDraftRatio || 0.10).toFixed(2);
+  if (pe(which,'specDraftOverheadLabel')) pe(which,'specDraftOverheadLabel').textContent = parseFloat(cfg.specDraftOverhead || 0.15).toFixed(2);
+  if (pe(which,'maxUsersLabel')) pe(which,'maxUsersLabel').textContent = parseInt(cfg.maxConcurrentUsers || 100).toLocaleString();
+  if (pe(which,'queueDepthLabel')) pe(which,'queueDepthLabel').textContent = parseFloat(cfg.queueDepthMultiplier || 1.5).toFixed(2);
+  if (pe(which,'bwUtilLimitLabel')) pe(which,'bwUtilLimitLabel').textContent = parseFloat(cfg.bandwidthUtilizationLimit || 0.90).toFixed(2);
+}
+
+function paneUpdateGpuSpecs(which) {
+  const sel = pe(which,'gpuModel'); if (!sel) return;
+  const val = sel.value;
+  const customField = pe(which,'customVramField'); if (customField) customField.style.display = val === 'custom' ? '' : 'none';
+  paneUpdateCloudPricing(which);
+}
+
+function paneUpdateArchFields(which) {
+  const archEl = pe(which,'arch'); if (!archEl) return;
+  const arch = archEl.value;
+  const af = pe(which,'activeParamsField'); if (af) af.style.display = arch === 'moe' ? '' : 'none';
+  const ec = pe(which,'expertCard'); if (ec) ec.style.display = arch === 'moe' ? '' : 'none';
+}
+
+function paneUpdateCloudPricing(which) {
+  const provider = pe(which,'cloudProvider'); if (!provider) return;
+  const provVal = provider.value;
+  const selGpu = pe(which,'gpuModel'); const gpuVal = selGpu ? selGpu.value : 'H100-80';
+  const p = CLOUD_PRICING[provVal]; if (!p) return;
+  let html = `<strong>${p.name}</strong> — representative hourly GPU prices:<br>`;
+  for (const [key, price] of Object.entries(p.gpus)) {
+    const gpuName = GPU_SPECS[key] ? GPU_SPECS[key].name : key;
+    const priceStr = price !== null ? `$${price.toFixed(2)}/hr` : 'N/A';
+    const highlight = key === gpuVal ? 'color:var(--accent);font-weight:600' : '';
+    html += `<span style="${highlight}">  ${gpuName}: ${priceStr}</span><br>`;
+  }
+  const cpt = pe(which,'cloudPriceTable'); if (cpt) cpt.innerHTML = html;
+}
+
+function paneUpdateApiModelList(which) {
+  const provider = pe(which,'apiProvider'); if (!provider) return;
+  const provVal = provider.value;
+  const pricing = API_PRICING[provVal]; if (!pricing) return;
+  const presetKey = pe(which,'modelPreset') ? pe(which,'modelPreset').value : '';
+  let html = '';
+  for (const [key, p] of Object.entries(MODEL_PRESETS)) {
+    const apiPrice = pricing[key];
+    const activeClass = key === presetKey ? ' active' : '';
+    if (apiPrice) {
+      const inStr = apiPrice.input !== null ? '$' + apiPrice.input.toFixed(2) : 'N/A';
+      const outStr = apiPrice.output !== null ? '$' + apiPrice.output.toFixed(2) : 'N/A';
+      html += `<div class="api-model-row${activeClass}"><span class="model-name">${p.name}</span><span class="model-price"><span class="in">in: ${inStr}</span> / <span class="out">out: ${outStr}</span> /1M</span></div>`;
+    } else {
+      html += `<div class="api-model-row${activeClass}"><span class="model-name">${p.name}</span><span class="model-price" style="color:var(--text-dim)">not listed</span></div>`;
+    }
+  }
+  const aml = pe(which,'apiModelList'); if (aml) aml.innerHTML = html;
+}
+
+function paneFilterPresets(which) {
+  const filter = pe(which,'presetFilter'); if (!filter) return;
+  const filterVal = filter.value;
+  const sel = pe(which,'modelPreset'); if (!sel) return;
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">-- Select preset --</option>';
+  for (const [key, p] of Object.entries(MODEL_PRESETS)) {
+    if (filterVal === 'all' || p.arch === filterVal) {
+      const opt = document.createElement('option'); opt.value = key; opt.textContent = p.name; sel.appendChild(opt);
+    }
+  }
+  if (curVal && sel.querySelector(`option[value="${curVal}"]`)) sel.value = curVal;
+}
+
+function paneApplyPreset(which) {
+  const key = pe(which,'modelPreset'); if (!key) return;
+  const keyVal = key.value;
+  const descDiv = pe(which,'presetDesc');
+  if (!keyVal) { if (descDiv) { descDiv.style.display = 'none'; descDiv.innerHTML = ''; } return; }
+  const p = MODEL_PRESETS[keyVal]; if (!p) return;
+  const setV = (id, v) => { const e = pe(which, id); if (e) e.value = v; };
+  setV('params', p.params); setV('arch', p.arch);
+  if (pe(which,'archLabel')) pe(which,'archLabel').textContent = p.arch === 'moe' ? 'MoE' : 'Dense';
+  if (p.activeParams !== undefined) setV('activeParams', p.activeParams);
+  setV('nLayers', p.nLayers); setV('nKvHeads', p.nKvHeads); setV('headDim', p.headDim); setV('hiddenSize', p.hiddenSize);
+  paneUpdateArchFields(which);
+  if (descDiv) { descDiv.innerHTML = p.desc; descDiv.style.display = ''; }
+  paneRecalculate(which);
+}
+
+function paneUpdateNvlinkTopo(which) {
+  const topo = pe(which,'nvlinkTopo'); if (!topo) return;
+  const topoVal = topo.value;
+  const cfg = NVLink_TOPOLOGY[topoVal] || NVLink_TOPOLOGY['nvlink-900'];
+  const setV = (id, v) => { const e = pe(which, id); if (e) e.value = v; };
+  setV('nvlinkIntraNodeBw', cfg.intraNodeBw); setV('nvlinkInterNodeBw', cfg.interNodeBw);
+  if (pe(which,'nvlinkIntraLabel')) pe(which,'nvlinkIntraLabel').textContent = cfg.intraNodeBw;
+  if (pe(which,'nvlinkInterLabel')) pe(which,'nvlinkInterLabel').textContent = cfg.interNodeBw;
+  paneRecalculate(which);
+}
+
+function paneRecalculate(which) {
+  const cfg = paneGetConfig(which);
+
+  const paramsB = parseFloat(cfg.params) || 70;
+  const arch = cfg.arch;
+  const activeB = parseFloat(cfg.activeParams) || paramsB * 0.17;
+  const quantBpw = parseFloat(cfg.quant);
+  const kvBpw = parseInt(cfg.kvPrecision);
+  const ctxLen = parseInt(cfg.context);
+  const batchSize = parseInt(cfg.batchSize);
+  const overhead = parseFloat(cfg.overhead) / 100;
+  const nLayers = parseInt(cfg.nLayers);
+  const nKvHeads = parseInt(cfg.nKvHeads);
+  const headDim = parseInt(cfg.headDim);
+  const gpusPerServer = parseInt(cfg.gpuPerServer);
+  const numServers = parseInt(cfg.numServers);
+  const servingMode = cfg.servingMode;
+  const tp = parseInt(cfg.tpSize);
+  const pp = parseInt(cfg.ppSize);
+
+  let gpu;
+  const gpuModel = cfg.gpuModel;
+  if (gpuModel === 'custom') {
+    gpu = { vram: parseFloat(cfg.customVram) || 80, bw: 2000, name: 'Custom', price_hour: 2.00, tflops_bf16: 312 };
+  } else {
+    gpu = GPU_SPECS[gpuModel] || GPU_SPECS['H100-80'];
+  }
+
+  const promptLen = parseInt(cfg.promptLen) || 4096;
+  const prefillComputeEff = parseFloat(cfg.prefillComputeEff) || 0.5;
+  const prefillBatchSize = parseInt(cfg.prefillBatchSize) || 1;
+  const enableSpec = cfg.enableSpec;
+  const specDraftTokens = parseInt(cfg.specDraftTokens) || SPECULATIVE_DECODING.draftTokensPerStep;
+  const specAcceptRate = parseFloat(cfg.specAcceptRate) || SPECULATIVE_DECODING.acceptanceRate;
+  const specDraftRatio = parseFloat(cfg.specDraftRatio) || SPECULATIVE_DECODING.draftModelRatio;
+  const specDraftOverhead = parseFloat(cfg.specDraftOverhead) || SPECULATIVE_DECODING.draftOverhead;
+  const specSharedGPU = cfg.specSharedGPU;
+  const maxConcurrentUsers = parseInt(cfg.maxConcurrentUsers) || CONCURRENCY_MODEL.maxConcurrentUsers;
+  const targetP50Latency = parseFloat(cfg.targetP50Latency) || CONCURRENCY_MODEL.targetP50Latency;
+  const queueDepthMultiplier = parseFloat(cfg.queueDepthMultiplier) || CONCURRENCY_MODEL.queueDepthMultiplier;
+  const bandwidthUtilizationLimit = parseFloat(cfg.bandwidthUtilizationLimit) || CONCURRENCY_MODEL.bandwidthUtilizationLimit;
+
+  const nvlinkTopo = cfg.nvlinkTopo;
+  const nvlinkTopoCfg = NVLink_TOPOLOGY[nvlinkTopo] || NVLink_TOPOLOGY['nvlink-900'];
+  const nvlinkIntraNodeBw = parseInt(cfg.nvlinkIntraNodeBw) || nvlinkTopoCfg.intraNodeBw;
+  const nvlinkInterNodeBw = parseInt(cfg.nvlinkInterNodeBw) || nvlinkTopoCfg.interNodeBw;
+  const tpCrossNode = cfg.tpCrossNode;
+  const ppCrossNode = cfg.ppCrossNode;
+
+  const scalingModel = cfg.scalingModel;
+  const ncclAllReduceLatencyUs = parseFloat(cfg.ncclAllReduceLatencyUs) || SCALING_EFFICIENCY.ncclAllReduceBaseLatency;
+  const ncclBwUtil = parseFloat(cfg.ncclBwUtil) || SCALING_EFFICIENCY.ncclBandwidthUtilization;
+  const pipelineBubblePct = parseFloat(cfg.pipelineBubblePct) / 100 || SCALING_EFFICIENCY.pipelineBubbleOverhead;
+
+  const servingEngine = cfg.servingEngine;
+  const engineCfg = SERVING_OVERHEAD[servingEngine] || SERVING_OVERHEAD['raw'];
+  const vllmBlockSize = parseInt(cfg.vllmBlockSize) || 16;
+  const vllmMaxNumBatchedTokens = parseInt(cfg.vllmMaxNumBatchedTokens) || 8192;
+  const vllmMaxNumSeqs = parseInt(cfg.vllmMaxNumSeqs) || 256;
+  const tgiMaxBatchSize = parseInt(cfg.tgiMaxBatchSize) || TGI_DEFAULTS.maxBatchSize;
+  const tgiMaxWaitingSeqs = parseInt(cfg.tgiMaxWaitingSeqs) || TGI_DEFAULTS.maxWaitingSequences;
+  const tgiMaxTotalTokens = parseInt(cfg.tgiMaxTotalTokens) || TGI_DEFAULTS.maxTotalTokens;
+  const sglangCacheHitRate = parseFloat(cfg.sglangCacheHitRate) ?? SGLANG_RADIX.cacheHitRate;
+  const sglangPrefixCacheSize = parseFloat(cfg.sglangPrefixCacheSize) || SGLANG_RADIX.prefixCacheSize;
+  const sglangRadixTreeOverhead = parseFloat(cfg.sglangRadixTreeOverhead) / 100 || SGLANG_RADIX.radixTreeOverhead;
+
+  let effectiveKvWaste = engineCfg.kvWaste;
+  if (servingEngine === 'vllm') effectiveKvWaste = vllmBlockSize === 32 ? 1.08 : 1.15;
+  let effectiveBatchEff = engineCfg.batchEff;
+  if (servingEngine === 'vllm') {
+    const avgTokensPerReq = ctxLen * 0.3;
+    const totalBatchedTokens = batchSize * avgTokensPerReq;
+    const tokenHeadroom = vllmMaxNumBatchedTokens > 0 ? Math.min(1, totalBatchedTokens / vllmMaxNumBatchedTokens) : 1;
+    const seqHeadroom = vllmMaxNumSeqs > 0 ? Math.min(1, batchSize / vllmMaxNumSeqs) : 1;
+    effectiveBatchEff = 1.0 - (1.0 - engineCfg.batchEff) * ((tokenHeadroom + seqHeadroom) / 2);
+  }
+  let tgiBatchingMultiplier = 1.0, tgiQueueDepth = 1.0;
+  if (servingEngine === 'tgi') {
+    const batchRatio = tgiMaxBatchSize > 0 ? Math.min(1.0, batchSize / tgiMaxBatchSize) : 1.0;
+    const avgTokensPerReqTgi = ctxLen * 0.3;
+    const totalTokensInFlight = batchSize * avgTokensPerReqTgi;
+    const tokenBudgetRatio = tgiMaxTotalTokens > 0 ? Math.min(1.0, totalTokensInFlight / tgiMaxTotalTokens) : 1.0;
+    tgiBatchingMultiplier = Math.min(batchRatio, tokenBudgetRatio) * engineCfg.batchEff;
+    tgiQueueDepth = tgiMaxBatchSize > 0 ? tgiMaxWaitingSeqs / tgiMaxBatchSize : 1.0;
+  }
+
+  const totalGpus = gpusPerServer * numServers;
+  let scalingEfficiency = 1.0, allReducePenalty = 0, pipelineBubblePenalty = 0;
+  if (numServers > 1) {
+    const tpGpusPerServer = Math.min(tp, gpusPerServer);
+    const crossNodeTP = tp > gpusPerServer;
+    const crossNodePP = pp > 1 && ppCrossNode === 'cross-node';
+    if (crossNodeTP) {
+      const effParams = arch === 'moe' ? activeB : paramsB;
+      const computeTimePerToken = (effParams * (quantBpw / 8) * 1e9) / (gpu.bw * 1e9 * tp);
+      const commTimePerAllReduce = ncclAllReduceLatencyUs * 1e-6;
+      const numAllReduces = nLayers * 2;
+      const totalCommTime = commTimePerAllReduce * numAllReduces * (tp / tpGpusPerServer);
+      const totalComputeTime = computeTimePerToken * ctxLen * batchSize;
+      allReducePenalty = totalComputeTime > 0 ? Math.min(totalCommTime / (totalCommTime + totalComputeTime), 0.5) : 0;
+    }
+    if (crossNodePP) pipelineBubblePenalty = ((pp - 1) / (pp * 2)) * pipelineBubblePct;
+    else if (pp > 1) pipelineBubblePenalty = ((pp - 1) / (pp * 2)) * (pipelineBubblePct * 0.3);
+    const commEfficiency = (1 - allReducePenalty) * (1 - pipelineBubblePenalty);
+    if (scalingModel === 'empirical') {
+      const curveKeys = Object.keys(SCALING_EFFICIENCY.scalingEfficiencyCurve).map(Number).sort((a,b) => a - b);
+      let curveVal = SCALING_EFFICIENCY.scalingEfficiencyCurve[1] || 1.0;
+      for (const k of curveKeys) { if (numServers >= k) curveVal = SCALING_EFFICIENCY.scalingEfficiencyCurve[k]; }
+      scalingEfficiency = curveVal * commEfficiency;
+    } else if (scalingModel === 'nccl-aware') {
+      scalingEfficiency = (gpu.bw * ncclBwUtil / gpu.bw) * commEfficiency;
+    } else { scalingEfficiency = commEfficiency; }
+  }
+
+  const effParams = arch === 'moe' ? activeB : paramsB;
+  const modelMemGB = effParams * (quantBpw / 8);
+  const modelWithOverhead = modelMemGB * (1 + overhead);
+  const kvPerTokenBytes = 2 * nLayers * nKvHeads * headDim * (kvBpw / 8);
+  const kvCacheGB = (kvPerTokenBytes * ctxLen * batchSize) / 1e9;
+  const kvEngineOverhead = kvCacheGB * effectiveKvWaste;
+  const tensorMemGB = paramsB * (quantBpw / 8);
+  const modelPerGpuGB = tensorMemGB / (tp * pp);
+  const kvPerGpuGB = servingMode === 'disaggregated' ? kvEngineOverhead : kvEngineOverhead / tp;
+  const prefixCachePerGpuGB = servingEngine === 'sglang' ? sglangPrefixCacheSize / (servingMode === 'disaggregated' ? 1 : tp) : 0;
+  const totalPerGpuGB = modelPerGpuGB * (1 + overhead) + kvPerGpuGB + prefixCachePerGpuGB;
+  const gpusNeeded = Math.ceil(totalPerGpuGB / (gpu.vram * 0.90));
+  const serversNeeded = Math.ceil(gpusNeeded / gpusPerServer);
+
+  const bwRatio = nvlinkInterNodeBw > 0 ? nvlinkIntraNodeBw / nvlinkInterNodeBw : 1;
+  let nvlinkGpuPenalty = 1.0;
+  const gpusNeededPerTp = tp > 0 ? Math.ceil(gpusNeeded / tp) : gpusNeeded;
+  const tpFitsNode = gpusNeededPerTp <= gpusPerServer;
+  const tpIsCrossNode = tpCrossNode === 'cross-node' || (tpCrossNode === 'auto' && !tpFitsNode && tp > gpusPerServer);
+  if (tpIsCrossNode) nvlinkGpuPenalty = 1.0 + Math.log10(Math.max(1, bwRatio)) * 0.15;
+  const nvlinkAdjustedGpus = Math.ceil(gpusNeeded * nvlinkGpuPenalty);
+
+  let epAdjustedGpus = nvlinkAdjustedGpus, epEfficiency = 100;
+  if (arch === 'moe') {
+    const numExperts = parseInt(cfg.numExperts) || MOE_EXPERT_CONFIG.defaultNumExperts;
+    const topK = parseInt(cfg.topK) || MOE_EXPERT_CONFIG.defaultTopK;
+    const epSize = parseInt(cfg.epSize) || 1;
+    const allToAllOverheadPct = parseFloat(cfg.allToAllOverhead) || 5;
+    const loadBalancePenalty = parseFloat(cfg.loadBalancePenalty) || 10;
+    const epAllToAllOverhead = (allToAllOverheadPct / 100) * (numExperts / epSize) * (topK / numExperts);
+    const epLoadImbOverhead = loadBalancePenalty / 100;
+    const epCombinedOverhead = 1 + epAllToAllOverhead + epLoadImbOverhead;
+    epAdjustedGpus = Math.ceil(gpusNeeded * epCombinedOverhead);
+    epEfficiency = epSize > 1 ? ((1 - epAllToAllOverhead - epLoadImbOverhead) * 100) : 100;
+  }
+
+  const gpuUtil = (totalPerGpuGB / gpu.vram) * 100;
+  const utilClass = gpuUtil < 80 ? 'ok' : gpuUtil > 95 ? 'bad' : 'warn';
+  const totalClusterVram = totalGpus * gpu.vram;
+  const sysRamGB = modelMemGB * 2;
+  const nvmeGB = modelMemGB * 3;
+  const memBwTokensPerSec = gpu.bw * 1e9 / (effParams * 1e9 * (quantBpw / 8) / tp);
+  let effectiveDecodeThroughput = memBwTokensPerSec / effectiveBatchEff;
+  if (servingEngine === 'tgi') effectiveDecodeThroughput *= tgiBatchingMultiplier;
+  let effectiveRadixThroughput = effectiveDecodeThroughput, radixMultiplier = 1.0;
+  if (servingEngine === 'sglang') {
+    radixMultiplier = sglangCacheHitRate * 1.5 + (1.0 - sglangCacheHitRate) * (1.0 - sglangRadixTreeOverhead);
+    effectiveRadixThroughput = effectiveDecodeThroughput * radixMultiplier;
+  }
+  const tokensPerDollar = (effectiveDecodeThroughput * 3600) / gpu.price_hour;
+  const tokDollarFormatted = tokensPerDollar > 1e6 ? (tokensPerDollar/1e6).toFixed(1) + 'M' : tokensPerDollar > 1e3 ? (tokensPerDollar/1e3).toFixed(1) + 'K' : tokensPerDollar.toFixed(0);
+
+  const gpuKey = gpuModel === 'custom' ? null : gpuModel;
+  const provVal = cfg.cloudProvider;
+  const cloudPricePerGpu = (gpuKey && CLOUD_PRICING[provVal] && CLOUD_PRICING[provVal].gpus[gpuKey] != null) ? CLOUD_PRICING[provVal].gpus[gpuKey] : gpu.price_hour;
+  const clusterCostPerHour = cloudPricePerGpu * gpusNeeded;
+
+  const gpuTflops = gpu.tflops_bf16 || 990;
+  const computePrefillTps = (gpuTflops * 1e12) / (2 * effParams * 1e9 * (quantBpw / 8) / tp) * prefillComputeEff;
+  const effectivePrefillTps = computePrefillTps * engineCfg.prefillEff;
+  const costPer1MInput = effectivePrefillTps > 0 ? ((1_000_000 / effectivePrefillTps / 3600) * cloudPricePerGpu * gpusNeeded) : 0;
+  const costPer1MOutput = effectiveDecodeThroughput > 0 ? ((1_000_000 / effectiveDecodeThroughput / 3600) * cloudPricePerGpu * gpusNeeded) : 0;
+
+  const prefillLatencyMs = effectivePrefillTps > 0 ? (promptLen * prefillBatchSize / effectivePrefillTps * 1000) : 0;
+  const rTTFT = effectivePrefillTps > 0 ? (promptLen / effectivePrefillTps) * 1000 : 0;
+  const batchQueuingFactor = 1 + (prefillBatchSize - 1) * 0.15;
+  const rTTFTBatched = rTTFT * batchQueuingFactor;
+
+  let specDecodeThroughput = effectiveDecodeThroughput, specSpeedup = 1.0;
+  if (enableSpec) {
+    specSpeedup = (1 + specAcceptRate * specDraftTokens) / (1 + specDraftOverhead);
+    specDecodeThroughput = effectiveDecodeThroughput * specSpeedup;
+  }
+
+  const outputTokensPerReq = 256;
+  const effectiveReqPerSec = effectiveDecodeThroughput > 0 ? effectiveDecodeThroughput / outputTokensPerReq : 0;
+  const latencyWithQueue = targetP50Latency * (1 + (maxConcurrentUsers - 1) * queueDepthMultiplier * 0.01);
+  const satReached = maxConcurrentUsers > 0 && effectiveReqPerSec > 0 ? (maxConcurrentUsers / effectiveReqPerSec) > bandwidthUtilizationLimit : false;
+  const effectiveQueueDepth = maxConcurrentUsers > 0 ? queueDepthMultiplier * maxConcurrentUsers : 0;
+
+  const throughputWithScaling = numServers > 1 ? (effectiveDecodeThroughput * scalingEfficiency) : effectiveDecodeThroughput;
+
+  // Update pane results
+  const setR = (id, val) => { const e = pe(which, id); if (e) e.textContent = val; };
+  setR('rModelMem', modelWithOverhead.toFixed(1));
+  setR('rKvCache', kvEngineOverhead.toFixed(2));
+  setR('rTotalPerGpu', totalPerGpuGB.toFixed(1));
+  setR('rGpusNeeded', gpusNeeded);
+  setR('rServersNeeded', serversNeeded);
+  setR('rTotalCluster', totalClusterVram.toFixed(0));
+  setR('rUtil', gpuUtil.toFixed(1) + '%');
+  const rUtilEl = pe(which, 'rUtil'); if (rUtilEl && rUtilEl.parentElement) rUtilEl.parentElement.className = 'metric ' + utilClass;
+  setR('rSysRam', sysRamGB.toFixed(0));
+  setR('rNvme', nvmeGB.toFixed(0));
+  setR('rTokensPerDollar', tokDollarFormatted);
+  setR('rCostPerHour', '$' + clusterCostPerHour.toFixed(2) + '/hr');
+  if (pe(which, 'rCloudCost')) pe(which, 'rCloudCost').textContent = '$' + clusterCostPerHour.toFixed(2) + '/hr';
+  setR('rCostInput', '$' + costPer1MInput.toFixed(2) + '/1M tok');
+  setR('rCostOutput', '$' + costPer1MOutput.toFixed(2) + '/1M tok');
+  setR('rPrefillThroughput', effectivePrefillTps.toFixed(0) + ' tok/s');
+  setR('rDecodeThroughput', effectiveDecodeThroughput.toFixed(0) + ' tok/s');
+  setR('rPrefillLatency', prefillLatencyMs.toFixed(1) + ' ms');
+  setR('rTTFT', Math.round(rTTFT).toLocaleString() + ' ms');
+  setR('rTTFTBatched', Math.round(rTTFTBatched).toLocaleString() + ' ms');
+  setR('rSpecDecodeThroughput', enableSpec ? specDecodeThroughput.toFixed(0) + ' tok/s' : 'N/A (disabled)');
+  setR('rSpecSpeedup', enableSpec ? specSpeedup.toFixed(2) + '×' : 'N/A');
+  setR('rMaxConcurrentUsers', maxConcurrentUsers.toLocaleString());
+  setR('rReqPerSec', effectiveReqPerSec.toFixed(2) + ' req/s');
+  setR('rConcurrencyLatency', 'p50: ' + latencyWithQueue.toFixed(0) + 'ms / p95: ' + (latencyWithQueue * 2).toFixed(0) + 'ms');
+  setR('rSatReached', satReached ? 'Yes ⚠️' : 'No ✓');
+  const rSatEl = pe(which, 'rSatReached'); if (rSatEl && rSatEl.parentElement) rSatEl.parentElement.className = satReached ? 'metric bad' : 'metric ok';
+  setR('rQueueDepth', effectiveQueueDepth.toFixed(0));
+  setR('rEffectiveThroughput', effectiveDecodeThroughput.toFixed(0) + ' tok/s');
+  if (servingEngine === 'sglang') {
+    setR('rSglangRadixThroughput', effectiveRadixThroughput.toFixed(0) + ' tok/s');
+  }
+  setR('rEpEfficiency', arch === 'moe' ? epEfficiency.toFixed(1) + '%' : 'N/A (dense)');
+  setR('rEpAdjustedGpus', arch === 'moe' ? epAdjustedGpus : 'N/A (dense)');
+  setR('rScalingEfficiency', (scalingEfficiency * 100).toFixed(1) + '%');
+  setR('rMultiNodePenalty', numServers > 1 ? ((1 - scalingEfficiency) * 100).toFixed(1) + '%' : 'N/A (single node)');
+  setR('rEffectiveTputWithScaling', throughputWithScaling.toFixed(0) + ' tok/s');
+
+  // Update pane-specific show/hide
+  if (pe(which, 'vllmFields')) pe(which, 'vllmFields').style.display = servingEngine === 'vllm' ? '' : 'none';
+  if (pe(which, 'sglangFields')) pe(which, 'sglangFields').style.display = servingEngine === 'sglang' ? '' : 'none';
+  if (pe(which, 'tgiFields')) pe(which, 'tgiFields').style.display = servingEngine === 'tgi' ? '' : 'none';
+  if (pe(which, 'specDecodingFields')) pe(which, 'specDecodingFields').style.display = enableSpec ? '' : 'none';
+
+  // Update notes
+  let notes = [];
+  if (arch === 'moe') notes.push(`<strong>MoE:</strong> ${paramsB}B total / ${activeB}B active.`);
+  if (tp > 1) notes.push(`<strong>TP=${tp}:</strong> Model sharded across ${tp} GPUs.`);
+  notes.push(`<strong>Memory BW:</strong> ~${memBwTokensPerSec.toFixed(0)} tok/s raw, ~${effectiveDecodeThroughput.toFixed(0)} tok/s effective.`);
+  notes.push(`<strong>CE-005 Costs:</strong> In $${costPer1MInput.toFixed(2)}/1M, Out $${costPer1MOutput.toFixed(2)}/1M.`);
+  const notesEl = pe(which, 'notes');
+  if (notesEl) notesEl.innerHTML = notes.join('<br>');
+
+  // After recalculation, re-run diff check
+  if (compareMode) diffCheck();
+}
+
+function diffCheck() {
+  // Clear previous highlights
+  document.querySelectorAll('.diff-highlight').forEach(el => el.classList.remove('diff-highlight'));
+
+  const fields = [
+    'params','arch','activeParams','nLayers','nKvHeads','headDim','hiddenSize',
+    'quant','kvPrecision','context','batchSize','overhead',
+    'gpuModel','customVram','gpuPerServer','numServers','servingMode','tpSize','ppSize',
+    'numExperts','topK','epSize','allToAllOverhead','loadBalancePenalty',
+    'nvlinkTopo','nvlinkIntraNodeBw','nvlinkInterNodeBw','tpCrossNode','ppCrossNode',
+    'scalingModel','ncclAllReduceLatencyUs','ncclBwUtil','pipelineBubblePct',
+    'servingEngine','vllmBlockSize','vllmMaxNumBatchedTokens','vllmMaxNumSeqs',
+    'tgiMaxBatchSize','tgiMaxWaitingSeqs','tgiMaxTotalTokens',
+    'sglangCacheHitRate','sglangPrefixCacheSize','sglangRadixTreeOverhead',
+    'promptLen','prefillComputeEff','prefillBatchSize',
+    'specDraftTokens','specAcceptRate','specDraftRatio','specDraftOverhead',
+    'maxConcurrentUsers','targetP50Latency','targetP95Latency','queueDepthMultiplier','bandwidthUtilizationLimit',
+    'cloudProvider','apiProvider',
+  ];
+
+  for (const field of fields) {
+    const elA = pe('A', field);
+    const elB = pe('B', field);
+    if (!elA || !elB) continue;
+    const valA = elA.type === 'checkbox' ? elA.checked : elA.value;
+    const valB = elB.type === 'checkbox' ? elB.checked : elB.value;
+    if (String(valA) !== String(valB)) {
+      // Find parent .field element
+      let parentA = elA.closest('.field');
+      let parentB = elB.closest('.field');
+      if (parentA) parentA.classList.add('diff-highlight');
+      if (parentB) parentB.classList.add('diff-highlight');
+    }
+  }
+}
+
+function setupSyncedScroll() {
+  const paneA = document.getElementById('paneA');
+  const paneB = document.getElementById('paneB');
+  if (!paneA._syncSetup) {
+    let guard = false;
+    paneA.addEventListener('scroll', () => { if (!guard) { guard = true; paneB.scrollTop = paneA.scrollTop; requestAnimationFrame(() => { guard = false; }); } });
+    paneB.addEventListener('scroll', () => { if (!guard) { guard = true; paneA.scrollTop = paneB.scrollTop; requestAnimationFrame(() => { guard = false; }); } });
+    paneA._syncSetup = true;
+  }
+}
+
+function paneImport(which) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const cfg = JSON.parse(ev.target.result);
+        paneSetConfig(which, cfg);
+        paneRecalculate(which);
+        if (which === 'A') configA = cfg; else configB = cfg;
+        diffCheck();
+        flashStatus(`Imported to Pane ${which} ✓`);
+      } catch { flashStatus('Invalid JSON', true); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function copyToPaneB() {
+  configA = paneGetConfig('A');
+  paneSetConfig('B', configA);
+  paneRecalculate('B');
+  diffCheck();
+  flashStatus('Copied A → B ✓');
+}
+
+function copyToPaneA() {
+  configB = paneGetConfig('B');
+  paneSetConfig('A', configB);
+  paneRecalculate('A');
+  diffCheck();
+  flashStatus('Copied B → A ✓');
+}
 </script>
 </body>
 </html>
