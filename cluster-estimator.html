@@ -431,6 +431,34 @@
     <div class="notes" id="specDecodingNote">Boost: decode_tps × (1 + acceptance × draft_tokens) / (1 + overhead)</div>
   </div>
 
+  <!-- CE-016: Concurrent User Modeling Card -->
+  <div class="card">
+    <h2>Concurrent Users (CE-016)</h2>
+    <div class="field">
+      <label>Max Concurrent Users <span class="slider-val" id="maxUsersLabel">100</span></label>
+      <input type="range" id="maxConcurrentUsers" value="100" min="1" max="10000" step="1" oninput="document.getElementById('maxUsersLabel').textContent=parseInt(this.value).toLocaleString()" onchange="recalculate()">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Target P50 Latency (ms)</label>
+        <input type="number" id="targetP50Latency" value="500" min="10" max="60000" step="10" onchange="recalculate()">
+      </div>
+      <div class="field">
+        <label>Target P95 Latency (ms)</label>
+        <input type="number" id="targetP95Latency" value="2000" min="10" max="120000" step="10" onchange="recalculate()">
+      </div>
+    </div>
+    <div class="field">
+      <label>Queue Depth Multiplier <span class="slider-val" id="queueDepthLabel">1.50</span></label>
+      <input type="range" id="queueDepthMultiplier" value="1.5" min="1" max="3" step="0.01" oninput="document.getElementById('queueDepthLabel').textContent=parseFloat(this.value).toFixed(2)" onchange="recalculate()">
+    </div>
+    <div class="field">
+      <label>Bandwidth Utilization Limit <span class="slider-val" id="bwUtilLimitLabel">0.90</span></label>
+      <input type="range" id="bandwidthUtilizationLimit" value="0.90" min="0.5" max="0.99" step="0.01" oninput="document.getElementById('bwUtilLimitLabel').textContent=parseFloat(this.value).toFixed(2)" onchange="recalculate()">
+    </div>
+    <div class="notes" id="concurrencyNote">CE-016: Requests/sec at P50 latency. Queue depth amplifies latency as users increase. Saturation occurs when request rate exceeds bandwidth limit.</div>
+  </div>
+
   <div class="card">
     <h2>Cloud Pricing</h2>
     <div class="field">
@@ -510,6 +538,12 @@
     <div class="metric"><div class="value" id="rSpecSpeedup">—</div><div class="label">Speedup vs Baseline (CE-015)</div></div>
     <div class="metric"><div class="value" id="rSpecDraftMem">—</div><div class="label">Draft Model Mem GB (CE-015)</div></div>
     <div class="metric"><div class="value" id="rSpecAcceptance">—</div><div class="label">Acceptance Rate (CE-015)</div></div>
+    <!-- CE-016: Concurrent user modeling metrics -->
+    <div class="metric"><div class="value" id="rMaxConcurrentUsers">—</div><div class="label">Max Concurrent Users (CE-016)</div></div>
+    <div class="metric"><div class="value" id="rReqPerSec">—</div><div class="label">Requests/sec @ P50 (CE-016)</div></div>
+    <div class="metric"><div class="value" id="rConcurrencyLatency">—</div><div class="label">Latency @ Max Load (CE-016)</div></div>
+    <div class="metric"><div class="value" id="rSatReached">—</div><div class="label">Bandwidth Saturated? (CE-016)</div></div>
+    <div class="metric"><div class="value" id="rQueueDepth">—</div><div class="label">Effective Queue Depth (CE-016)</div></div>
     <!-- CE-007: Serving engine overhead metrics -->
     <div class="metric"><div class="value" id="rEffectiveThroughput">—</div><div class="label">Eff. Throughput tok/s (CE-007)</div></div>
     <div class="metric"><div class="value" id="rKvWastePct">—</div><div class="label">KV Waste % (CE-007)</div></div>
@@ -670,6 +704,15 @@ const SPECULATIVE_DECODING = {
   boostFormula: "decode_tps * (1 + acceptanceRate * draftTokensPerStep) / (1 + draftOverhead)",
 };
 
+// CE-016: Concurrent user modeling (requests/sec at target latency)
+const CONCURRENCY_MODEL = {
+  maxConcurrentUsers: 100,
+  targetP50Latency: 500,          // ms
+  targetP95Latency: 2000,         // ms
+  queueDepthMultiplier: 1.5,
+  bandwidthUtilizationLimit: 0.90,
+};
+
 const MODEL_PRESETS = {
   'llama-3-70b':      { name: 'Llama 3 70B',       params: 70,  arch: 'dense', nLayers: 80,  nKvHeads: 8, headDim: 128, hiddenSize: 8192,  desc: 'Meta Llama 3 — 70B dense, 80 layers, GQA (8 KV heads), 128 head dim' },
   'llama-4-400b-moe':  { name: 'Llama 4 400B (MoE)', params: 400, arch: 'moe',  activeParams: 40,   nLayers: 126, nKvHeads: 8, headDim: 128, hiddenSize: 16384, desc: 'Meta Llama 4 Behemoth — 400B total, ~40B active, 16 experts, 126 layers' },
@@ -819,6 +862,13 @@ function recalculate() {
   const specDraftRatio = parseFloat(document.getElementById('specDraftRatio').value) || SPECULATIVE_DECODING.draftModelRatio;
   const specDraftOverhead = parseFloat(document.getElementById('specDraftOverhead').value) || SPECULATIVE_DECODING.draftOverhead;
   const specSharedGPU = document.getElementById('specSharedGPU').checked;
+
+  // CE-016: Concurrent user modeling fields
+  const maxConcurrentUsers = parseInt(document.getElementById('maxConcurrentUsers').value) || CONCURRENCY_MODEL.maxConcurrentUsers;
+  const targetP50Latency = parseFloat(document.getElementById('targetP50Latency').value) || CONCURRENCY_MODEL.targetP50Latency;
+  const targetP95Latency = parseFloat(document.getElementById('targetP95Latency').value) || CONCURRENCY_MODEL.targetP95Latency;
+  const queueDepthMultiplier = parseFloat(document.getElementById('queueDepthMultiplier').value) || CONCURRENCY_MODEL.queueDepthMultiplier;
+  const bandwidthUtilizationLimit = parseFloat(document.getElementById('bandwidthUtilizationLimit').value) || CONCURRENCY_MODEL.bandwidthUtilizationLimit;
 
   // CE-010: NVLink topology bandwidth fields
   const nvlinkTopo = document.getElementById('nvlinkTopo').value;
@@ -1222,6 +1272,22 @@ function recalculate() {
   document.getElementById('rSpecDraftMem').textContent = enableSpec ? draftModelMemGB.toFixed(1) + ' GB' : 'N/A';
   document.getElementById('rSpecAcceptance').textContent = enableSpec ? (specDisplayRate * 100).toFixed(0) + '%' : 'N/A';
 
+  // CE-016: Concurrent user modeling — requests/sec at target latency
+  const outputTokensPerReq = 256; // assume 256 output tokens per request
+  const effectiveReqPerSec = effectiveDecodeThroughput > 0 ? effectiveDecodeThroughput / outputTokensPerReq : 0;
+  // Latency scales with queue depth: more users = more queuing
+  const latencyWithQueue = targetP50Latency * (1 + (maxConcurrentUsers - 1) * queueDepthMultiplier * 0.01);
+  const satReached = maxConcurrentUsers > 0 && effectiveReqPerSec > 0
+    ? (maxConcurrentUsers / effectiveReqPerSec) > bandwidthUtilizationLimit
+    : false;
+  const effectiveQueueDepth = maxConcurrentUsers > 0 ? queueDepthMultiplier * maxConcurrentUsers : 0;
+  document.getElementById('rMaxConcurrentUsers').textContent = maxConcurrentUsers.toLocaleString();
+  document.getElementById('rReqPerSec').textContent = effectiveReqPerSec.toFixed(2) + ' req/s';
+  document.getElementById('rConcurrencyLatency').textContent = 'p50: ' + latencyWithQueue.toFixed(0) + 'ms / p95: ' + (latencyWithQueue * 2).toFixed(0) + 'ms';
+  document.getElementById('rSatReached').textContent = satReached ? 'Yes \u26a0\ufe0f' : 'No \u2713';
+  document.getElementById('rSatReached').parentElement.className = satReached ? 'metric bad' : 'metric ok';
+  document.getElementById('rQueueDepth').textContent = effectiveQueueDepth.toFixed(0);
+
   // CE-007: Engine overhead metrics
   document.getElementById('rEffectiveThroughput').textContent = effectiveDecodeThroughput.toFixed(0) + ' tok/s';
   document.getElementById('rKvWastePct').textContent = effectiveKvWaste === rawKvWaste ? '0% (baseline)' : (effectiveKvWaste * 100).toFixed(1) + '%';
@@ -1321,6 +1387,8 @@ function recalculate() {
   if (enableSpec) {
     notes.push(`<strong>CE-015 Speculative Decoding:</strong> ${specDraftTokens} draft tokens/step, ${(specAcceptRate*100).toFixed(0)}% acceptance, ${(specDraftRatio*100).toFixed(0)}% draft:target ratio, ${(specDraftOverhead*100).toFixed(0)}% overhead. Boost: ${specSpeedup.toFixed(2)}× → ${specDecodeThroughput.toFixed(0)} tok/s effective decode. Draft model ~${draftModelMemGB.toFixed(1)} GB (${specSharedGPU ? 'shared GPU' : 'separate GPU'}). Formula: (1 + α·k) / (1 + δ).`);
   }
+  // CE-016: Concurrent user modeling note
+  notes.push(`<strong>CE-016 Concurrency:</strong> ${maxConcurrentUsers.toLocaleString()} users → ${effectiveReqPerSec.toFixed(2)} req/s @ ${latencyWithQueue.toFixed(0)}ms P50. Queue depth multiplier: ${queueDepthMultiplier.toFixed(2)}×, BW saturation: ${satReached ? 'reached \u26a0\ufe0f' : 'not reached \u2713'} (limit ${(bandwidthUtilizationLimit*100).toFixed(0)}%). Formula: latency = base × (1 + (users-1) × qdepth × 0.01).`);
   document.getElementById('notes').innerHTML = notes.join('<br>');
 
   updateArchFields();
@@ -1413,6 +1481,12 @@ function getConfig() {
     specDraftRatio: document.getElementById('specDraftRatio').value,
     specDraftOverhead: document.getElementById('specDraftOverhead').value,
     specSharedGPU: document.getElementById('specSharedGPU').checked,
+    // CE-016: Concurrent user modeling config
+    maxConcurrentUsers: document.getElementById('maxConcurrentUsers').value,
+    targetP50Latency: document.getElementById('targetP50Latency').value,
+    targetP95Latency: document.getElementById('targetP95Latency').value,
+    queueDepthMultiplier: document.getElementById('queueDepthMultiplier').value,
+    bandwidthUtilizationLimit: document.getElementById('bandwidthUtilizationLimit').value,
   };
 }
 
@@ -1447,6 +1521,10 @@ function setConfig(cfg) {
   document.getElementById('specAcceptRateLabel').textContent = parseFloat(cfg.specAcceptRate || 0.80).toFixed(2);
   document.getElementById('specDraftRatioLabel').textContent = parseFloat(cfg.specDraftRatio || 0.10).toFixed(2);
   document.getElementById('specDraftOverheadLabel').textContent = parseFloat(cfg.specDraftOverhead || 0.15).toFixed(2);
+  // CE-016: Update concurrency labels
+  document.getElementById('maxUsersLabel').textContent = parseInt(cfg.maxConcurrentUsers || 100).toLocaleString();
+  document.getElementById('queueDepthLabel').textContent = parseFloat(cfg.queueDepthMultiplier || 1.5).toFixed(2);
+  document.getElementById('bwUtilLimitLabel').textContent = parseFloat(cfg.bandwidthUtilizationLimit || 0.90).toFixed(2);
   recalculate();
 }
 
