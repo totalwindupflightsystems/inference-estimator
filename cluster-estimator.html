@@ -70,6 +70,7 @@
   <button onclick="importConfig()">Import JSON</button>
   <button onclick="saveConfig()">Save to Browser</button>
   <button onclick="loadConfig()">Load Saved</button>
+  <button onclick="copyLink()">🔗 Copy Link</button>
   <button class="primary" onclick="recalculate()">Recalculate</button>
   <button id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark theme">☀️ Light</button>
   <span class="status" id="status">Saved ✓</span>
@@ -573,6 +574,10 @@
 <script>
 // CE-017: Theme toggle — dark/light with localStorage + system preference detection
 const THEME_KEY = 'cluster-estimator-theme';
+
+// CE-018: URL hash encoding guard flag and debounce timer
+let hashUpdating = false;
+let hashDebounceTimer = null;
 
 function applyTheme(theme) {
   document.body.setAttribute('data-theme', theme);
@@ -1443,6 +1448,10 @@ function recalculate() {
     tgi: `TGI continuous batching (CE-009) — KV waste ~${(engineCfg.kvWaste*100).toFixed(0)}%. Max batch ${tgiMaxBatchSize}, queue depth ${tgiQueueDepth.toFixed(1)}×. HuggingFace's production engine.`,
   };
   document.getElementById('engineNotes').textContent = engineNotesMap[servingEngine] || '';
+
+  // CE-018: Debounced URL hash update (500ms)
+  clearTimeout(hashDebounceTimer);
+  hashDebounceTimer = setTimeout(encodeConfigToHash, 500);
 }
 
 function updateArchFields() {
@@ -1618,6 +1627,41 @@ function flashStatus(msg, isErr) {
   setTimeout(() => el.classList.remove('show'), 2000);
 }
 
+// CE-018: URL hash encoding/decoding for shareable links
+function encodeConfigToHash() {
+  const cfg = getConfig();
+  const json = JSON.stringify(cfg);
+  const encoded = btoa(json);
+  hashUpdating = true;
+  window.location.hash = encoded;
+  // Reset guard after a tick so hashchange event can fire without triggering decode
+  setTimeout(() => { hashUpdating = false; }, 100);
+}
+
+function decodeHashToConfig() {
+  if (hashUpdating) return;
+  const hash = window.location.hash;
+  if (!hash || hash === '#') return;
+  try {
+    const json = atob(hash.substring(1));
+    const cfg = JSON.parse(json);
+    setConfig(cfg);
+  } catch (e) {
+    // Invalid hash: ignore silently
+  }
+}
+
+function copyLink() {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    const btn = document.querySelector('button[onclick="copyLink()"]');
+    const origText = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = origText; }, 2000);
+  }).catch(() => {
+    flashStatus('Copy failed', true);
+  });
+}
+
 document.getElementById('arch').addEventListener('change', recalculate);
 document.querySelectorAll('input, select').forEach(el => {
   if (el.id === 'modelPreset' || el.id === 'presetFilter') return;
@@ -1634,6 +1678,13 @@ const saved = localStorage.getItem('cluster-estimator-config');
 if (saved) {
   try { setConfig(JSON.parse(saved)); } catch {}
 }
+// CE-018: Decode URL hash on initial page load (overrides localStorage if present)
+if (window.location.hash && window.location.hash !== '#') {
+  decodeHashToConfig();
+}
+
+// CE-018: Listen for hash changes (back/forward navigation, shared links)
+window.addEventListener('hashchange', decodeHashToConfig);
 </script>
 </body>
 </html>
