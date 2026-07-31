@@ -1,0 +1,26 @@
+{
+  "id": "llama-3.1-8b",
+  "name": "Llama 3.1 8B",
+  "params": 8.0,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 32.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 4096.0,
+  "desc": "Llama 3.1 8B dense, 32 layers, GQA",
+  "pricing": {
+    "openrouter": {
+      "input": 0.05,
+      "output": 0.08
+    },
+    "together": {
+      "input": 0.05,
+      "output": 0.08
+    },
+    "fireworks": {
+      "input": 0.045,
+      "output": 0.072
+    }
+  }
+}

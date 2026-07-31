@@ -1,0 +1,26 @@
+{
+  "id": "deepseek-v4-flash",
+  "name": "DeepSeek V4 Flash",
+  "params": 284.0,
+  "arch": "moe",
+  "activeParams": 13.0,
+  "nLayers": 43.0,
+  "nKvHeads": 1.0,
+  "headDim": 512.0,
+  "hiddenSize": 4096.0,
+  "desc": "DeepSeek V4 Flash 284B/~13B active MoE, MLA, 256 experts (top-6), CSA+HCA, 1M ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.14,
+      "output": 0.28
+    },
+    "together": {
+      "input": 0.14,
+      "output": 0.28
+    },
+    "fireworks": {
+      "input": 0.126,
+      "output": 0.252
+    }
+  }
+}

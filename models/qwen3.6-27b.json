@@ -1,0 +1,26 @@
+{
+  "id": "qwen3.6-27b",
+  "name": "Qwen3.6 27B",
+  "params": 27.0,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 64.0,
+  "nKvHeads": 4.0,
+  "headDim": 256.0,
+  "hiddenSize": 5120.0,
+  "desc": "Qwen3.6 27B dense, 64 layers, 256K ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.3,
+      "output": 2.0
+    },
+    "together": {
+      "input": 0.3,
+      "output": 2.0
+    },
+    "fireworks": {
+      "input": 0.27,
+      "output": 1.8
+    }
+  }
+}

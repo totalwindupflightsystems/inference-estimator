@@ -1,0 +1,26 @@
+{
+  "id": "mixtral-8x22b",
+  "name": "Mixtral 8\u00d722B",
+  "params": 141.0,
+  "arch": "moe",
+  "activeParams": 39.0,
+  "nLayers": 56.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 6144.0,
+  "desc": "Mixtral 8\u00d722B 141B/39B active MoE, 8 experts (top-2), 56 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.65,
+      "output": 0.65
+    },
+    "together": {
+      "input": 0.65,
+      "output": 0.65
+    },
+    "fireworks": {
+      "input": 0.585,
+      "output": 0.585
+    }
+  }
+}

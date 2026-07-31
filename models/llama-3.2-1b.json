@@ -1,0 +1,26 @@
+{
+  "id": "llama-3.2-1b",
+  "name": "Llama 3.2 1B",
+  "params": 1.2,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 16.0,
+  "nKvHeads": 8.0,
+  "headDim": 64.0,
+  "hiddenSize": 2048.0,
+  "desc": "Llama 3.2 1B dense, 16 layers, GQA",
+  "pricing": {
+    "openrouter": {
+      "input": 0.01,
+      "output": 0.02
+    },
+    "together": {
+      "input": 0.01,
+      "output": 0.02
+    },
+    "fireworks": {
+      "input": 0.009,
+      "output": 0.018
+    }
+  }
+}

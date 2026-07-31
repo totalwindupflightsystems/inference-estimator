@@ -1,0 +1,26 @@
+{
+  "id": "gemma-3-4b",
+  "name": "Gemma 3 4B",
+  "params": 4.1,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 34.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 2560.0,
+  "desc": "Gemma 3 4B dense, 34 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.02,
+      "output": 0.05
+    },
+    "together": {
+      "input": 0.02,
+      "output": 0.05
+    },
+    "fireworks": {
+      "input": 0.018,
+      "output": 0.045
+    }
+  }
+}

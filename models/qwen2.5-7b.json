@@ -1,0 +1,26 @@
+{
+  "id": "qwen2.5-7b",
+  "name": "Qwen2.5 7B",
+  "params": 7.6,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 28.0,
+  "nKvHeads": 4.0,
+  "headDim": 128.0,
+  "hiddenSize": 3584.0,
+  "desc": "Qwen2.5 7B dense, 28 layers, GQA",
+  "pricing": {
+    "openrouter": {
+      "input": 0.05,
+      "output": 0.1
+    },
+    "together": {
+      "input": 0.05,
+      "output": 0.1
+    },
+    "fireworks": {
+      "input": 0.045,
+      "output": 0.09
+    }
+  }
+}

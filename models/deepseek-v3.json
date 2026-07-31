@@ -1,0 +1,26 @@
+{
+  "id": "deepseek-v3",
+  "name": "DeepSeek V3",
+  "params": 671.0,
+  "arch": "moe",
+  "activeParams": 37.0,
+  "nLayers": 61.0,
+  "nKvHeads": 1.0,
+  "headDim": 576.0,
+  "hiddenSize": 7168.0,
+  "desc": "DeepSeek V3 671B/37B active MoE, MLA (kv_lora 512 + rope 64), 256 experts",
+  "pricing": {
+    "openrouter": {
+      "input": 0.27,
+      "output": 1.1
+    },
+    "together": {
+      "input": 0.27,
+      "output": 1.1
+    },
+    "fireworks": {
+      "input": 0.243,
+      "output": 0.99
+    }
+  }
+}

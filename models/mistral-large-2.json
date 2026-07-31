@@ -1,0 +1,26 @@
+{
+  "id": "mistral-large-2",
+  "name": "Mistral Large 2",
+  "params": 123.0,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 88.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 12288.0,
+  "desc": "Mistral Large 2 123B dense, 88 layers, GQA (8 KV heads)",
+  "pricing": {
+    "openrouter": {
+      "input": 2.0,
+      "output": 6.0
+    },
+    "together": {
+      "input": 2.0,
+      "output": 6.0
+    },
+    "fireworks": {
+      "input": 1.8,
+      "output": 5.4
+    }
+  }
+}

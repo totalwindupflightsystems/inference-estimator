@@ -1,0 +1,26 @@
+{
+  "id": "qwen3-32b",
+  "name": "Qwen3 32B",
+  "params": 32.8,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 64.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 5120.0,
+  "desc": "Qwen3 32B dense, 64 layers, GQA",
+  "pricing": {
+    "openrouter": {
+      "input": 0.08,
+      "output": 0.28
+    },
+    "together": {
+      "input": 0.08,
+      "output": 0.28
+    },
+    "fireworks": {
+      "input": 0.072,
+      "output": 0.252
+    }
+  }
+}

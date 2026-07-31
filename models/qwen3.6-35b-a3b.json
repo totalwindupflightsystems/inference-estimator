@@ -1,0 +1,26 @@
+{
+  "id": "qwen3.6-35b-a3b",
+  "name": "Qwen3.6 35B-A3B",
+  "params": 35.0,
+  "arch": "moe",
+  "activeParams": 3.0,
+  "nLayers": 40.0,
+  "nKvHeads": 2.0,
+  "headDim": 256.0,
+  "hiddenSize": 2048.0,
+  "desc": "Qwen3.6 35B-A3B MoE, 3B active, 256 experts (top-8), 256K ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.14,
+      "output": 1.0
+    },
+    "together": {
+      "input": 0.14,
+      "output": 1.0
+    },
+    "fireworks": {
+      "input": 0.126,
+      "output": 0.9
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "gpt-oss-20b",
+  "name": "GPT-OSS 20B",
+  "params": 21.0,
+  "arch": "moe",
+  "activeParams": 3.6,
+  "nLayers": 24.0,
+  "nKvHeads": 8.0,
+  "headDim": 64.0,
+  "hiddenSize": 2880.0,
+  "desc": "OpenAI gpt-oss-20b 21B/3.6B active MoE, 32 experts (top-4)",
+  "pricing": {
+    "openrouter": {
+      "input": 0.03,
+      "output": 0.14
+    },
+    "together": {
+      "input": 0.03,
+      "output": 0.14
+    },
+    "fireworks": {
+      "input": 0.027,
+      "output": 0.126
+    }
+  }
+}

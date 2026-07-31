@@ -1,0 +1,26 @@
+{
+  "id": "gemma-4-26b-a4b",
+  "name": "Gemma 4 26B-A4B",
+  "params": 26.0,
+  "arch": "moe",
+  "activeParams": 4.0,
+  "nLayers": 30.0,
+  "nKvHeads": 8.0,
+  "headDim": 256.0,
+  "hiddenSize": 2816.0,
+  "desc": "Gemma 4 26B-A4B MoE, 4B active, 128 experts, 256K ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.07,
+      "output": 0.34
+    },
+    "together": {
+      "input": 0.07,
+      "output": 0.34
+    },
+    "fireworks": {
+      "input": 0.063,
+      "output": 0.306
+    }
+  }
+}

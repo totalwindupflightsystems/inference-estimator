@@ -1,0 +1,26 @@
+{
+  "id": "qwen3.5-4b",
+  "name": "Qwen3.5 4B",
+  "params": 4.0,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 32.0,
+  "nKvHeads": 4.0,
+  "headDim": 256.0,
+  "hiddenSize": 2560.0,
+  "desc": "Qwen3.5 4B dense, 32 layers, 256K ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.05,
+      "output": 0.15
+    },
+    "together": {
+      "input": 0.05,
+      "output": 0.15
+    },
+    "fireworks": {
+      "input": 0.045,
+      "output": 0.135
+    }
+  }
+}

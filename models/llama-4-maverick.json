@@ -1,0 +1,26 @@
+{
+  "id": "llama-4-maverick",
+  "name": "Llama 4 Maverick",
+  "params": 400.0,
+  "arch": "moe",
+  "activeParams": 17.0,
+  "nLayers": 48.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 5120.0,
+  "desc": "Llama 4 Maverick 400B/17B active MoE, 128 experts, 48 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.2,
+      "output": 0.8
+    },
+    "together": {
+      "input": 0.2,
+      "output": 0.8
+    },
+    "fireworks": {
+      "input": 0.18,
+      "output": 0.72
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "qwen2.5-14b",
+  "name": "Qwen2.5 14B",
+  "params": 14.7,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 48.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 5120.0,
+  "desc": "Qwen2.5 14B dense, 48 layers, GQA",
+  "pricing": {
+    "openrouter": {
+      "input": 0.1,
+      "output": 0.2
+    },
+    "together": {
+      "input": 0.1,
+      "output": 0.2
+    },
+    "fireworks": {
+      "input": 0.09,
+      "output": 0.18
+    }
+  }
+}

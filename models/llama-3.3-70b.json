@@ -1,0 +1,26 @@
+{
+  "id": "llama-3.3-70b",
+  "name": "Llama 3.3 70B",
+  "params": 70.6,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 80.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 8192.0,
+  "desc": "Llama 3.3 70B dense, 80 layers, GQA",
+  "pricing": {
+    "openrouter": {
+      "input": 0.13,
+      "output": 0.4
+    },
+    "together": {
+      "input": 0.13,
+      "output": 0.4
+    },
+    "fireworks": {
+      "input": 0.117,
+      "output": 0.36
+    }
+  }
+}

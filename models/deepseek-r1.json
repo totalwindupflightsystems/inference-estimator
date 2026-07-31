@@ -1,0 +1,26 @@
+{
+  "id": "deepseek-r1",
+  "name": "DeepSeek R1",
+  "params": 671.0,
+  "arch": "moe",
+  "activeParams": 37.0,
+  "nLayers": 61.0,
+  "nKvHeads": 1.0,
+  "headDim": 576.0,
+  "hiddenSize": 7168.0,
+  "desc": "DeepSeek R1 671B/37B active MoE, MLA, reasoning model",
+  "pricing": {
+    "openrouter": {
+      "input": 0.7,
+      "output": 2.5
+    },
+    "together": {
+      "input": 0.7,
+      "output": 2.5
+    },
+    "fireworks": {
+      "input": 0.63,
+      "output": 2.25
+    }
+  }
+}

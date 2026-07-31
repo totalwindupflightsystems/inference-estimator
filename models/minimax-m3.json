@@ -1,0 +1,26 @@
+{
+  "id": "minimax-m3",
+  "name": "MiniMax-M3",
+  "params": 428.0,
+  "arch": "moe",
+  "activeParams": 23.0,
+  "nLayers": 60.0,
+  "nKvHeads": 4.0,
+  "headDim": 128.0,
+  "hiddenSize": 6144.0,
+  "desc": "MiniMax M3 428B/~23B active MoE, 128 experts (top-4), 60 layers, MSA, 1M ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.3,
+      "output": 1.2
+    },
+    "together": {
+      "input": 0.3,
+      "output": 1.2
+    },
+    "fireworks": {
+      "input": 0.27,
+      "output": 1.08
+    }
+  }
+}

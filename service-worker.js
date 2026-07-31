@@ -5,7 +5,8 @@ const CACHE_NAME = 'inference-estimator-v1';
 const PRECACHE_URLS = [
   './',
   './cluster-estimator.html',
-  './manifest.json'
+  './manifest.json',
+  './models/index.json'
 ];
 
 // Install: pre-cache essential files

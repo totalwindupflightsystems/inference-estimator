@@ -1,0 +1,26 @@
+{
+  "id": "qwen3-30b-a3b",
+  "name": "Qwen3 30B-A3B",
+  "params": 30.5,
+  "arch": "moe",
+  "activeParams": 3.3,
+  "nLayers": 48.0,
+  "nKvHeads": 4.0,
+  "headDim": 128.0,
+  "hiddenSize": 2048.0,
+  "desc": "Qwen3 30B-A3B MoE, 3.3B active, 128 experts (top-8)",
+  "pricing": {
+    "openrouter": {
+      "input": 0.12,
+      "output": 0.5
+    },
+    "together": {
+      "input": 0.12,
+      "output": 0.5
+    },
+    "fireworks": {
+      "input": 0.108,
+      "output": 0.45
+    }
+  }
+}

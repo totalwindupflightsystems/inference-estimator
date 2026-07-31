@@ -1,0 +1,26 @@
+{
+  "id": "qwen2.5-0.5b",
+  "name": "Qwen2.5 0.5B",
+  "params": 0.5,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 24.0,
+  "nKvHeads": 2.0,
+  "headDim": 128.0,
+  "hiddenSize": 896.0,
+  "desc": "Qwen2.5 0.5B dense, 24 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.005,
+      "output": 0.01
+    },
+    "together": {
+      "input": 0.005,
+      "output": 0.01
+    },
+    "fireworks": {
+      "input": 0.0045,
+      "output": 0.009
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "granite-4.1-8b",
+  "name": "Granite 4.1 8B",
+  "params": 8.0,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 40.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 4096.0,
+  "desc": "IBM Granite 4.1 8B dense, 40 layers, 128K ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.05,
+      "output": 0.1
+    },
+    "together": {
+      "input": 0.05,
+      "output": 0.1
+    },
+    "fireworks": {
+      "input": 0.045,
+      "output": 0.09
+    }
+  }
+}

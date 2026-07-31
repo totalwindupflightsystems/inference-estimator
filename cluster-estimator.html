@@ -783,7 +783,7 @@ const CLOUD_PRICING = {
 };
 
 // CE-006: API pricing per provider per model (USD per 1M tokens, input/output)
-const API_PRICING = {
+const FALLBACK_API_PRICING = {
   'openrouter': {
     'deepseek-r1':       { input: 0.7, output: 2.5 },
     'deepseek-v3':       { input: 0.27, output: 1.1 },
@@ -975,7 +975,7 @@ const CONCURRENCY_MODEL = {
   bandwidthUtilizationLimit: 0.90,
 };
 
-const MODEL_PRESETS = {
+const FALLBACK_MODEL_PRESETS = {
   'qwen3-0.6b': { name: 'Qwen3 0.6B', params: 0.6, arch: 'dense', nLayers: 28, nKvHeads: 8, headDim: 128, hiddenSize: 1024, desc: 'Qwen3 0.6B dense, 28 layers, GQA' },
   'qwen3-1.7b': { name: 'Qwen3 1.7B', params: 1.7, arch: 'dense', nLayers: 28, nKvHeads: 8, headDim: 128, hiddenSize: 2048, desc: 'Qwen3 1.7B dense, 28 layers, GQA' },
   'qwen3-4b': { name: 'Qwen3 4B', params: 4.0, arch: 'dense', nLayers: 36, nKvHeads: 8, headDim: 128, hiddenSize: 2560, desc: 'Qwen3 4B dense, 36 layers, GQA' },
@@ -1019,6 +1019,54 @@ const MODEL_PRESETS = {
   'granite-4.1-8b': { name: 'Granite 4.1 8B', params: 8.0, arch: 'dense', nLayers: 40, nKvHeads: 8, headDim: 128, hiddenSize: 4096, desc: 'IBM Granite 4.1 8B dense, 40 layers, 128K ctx' },
   'phi-4': { name: 'Phi-4', params: 14.7, arch: 'dense', nLayers: 32, nKvHeads: 16, headDim: 80, hiddenSize: 2560, desc: 'Microsoft Phi-4 14.7B dense, 32 layers' },
 };
+
+// ===== Dynamic Model Library (CE-025) =====
+// Presets live as per-model JSON files in ./models/ (index.json = manifest).
+// The page starts with embedded fallbacks, then swaps in the full library.
+let MODEL_PRESETS = Object.assign({}, FALLBACK_MODEL_PRESETS);
+let API_PRICING = JSON.parse(JSON.stringify(FALLBACK_API_PRICING));
+
+async function loadModelLibrary() {
+  try {
+    const res = await fetch('./models/index.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('manifest HTTP ' + res.status);
+    const manifest = await res.json();
+    const loaded = {};
+    const loadedPricing = {};
+    await Promise.all(manifest.models.map(async id => {
+      try {
+        const r = await fetch('./models/' + id + '.json', { cache: 'no-store' });
+        if (!r.ok) return;
+        const j = await r.json();
+        loaded[j.id] = {
+          name: j.name, params: j.params, arch: j.arch, activeParams: j.activeParams,
+          nLayers: j.nLayers, nKvHeads: j.nKvHeads, headDim: j.headDim,
+          hiddenSize: j.hiddenSize, desc: j.desc
+        };
+        if (j.pricing) {
+          for (const [prov, p] of Object.entries(j.pricing)) {
+            loadedPricing[prov] = loadedPricing[prov] || {};
+            loadedPricing[prov][j.id] = p;
+          }
+        }
+      } catch (e) { /* skip unreadable model file */ }
+    }));
+    if (Object.keys(loaded).length === 0) throw new Error('no models loaded');
+    MODEL_PRESETS = loaded;
+    API_PRICING = loadedPricing;
+    refreshModelUI();
+    flashStatus('Loaded ' + Object.keys(MODEL_PRESETS).length + ' models from library ✓');
+  } catch (e) {
+    console.warn('Model library unavailable (' + e.message + ') — using embedded fallback presets');
+    flashStatus('Embedded presets (' + Object.keys(MODEL_PRESETS).length + ') — library offline', true);
+  }
+}
+
+function refreshModelUI() {
+  filterPresets();
+  updateApiModelList();
+  recalculate();
+}
 
 function getGpuSpec() {
   const sel = document.getElementById('gpuModel').value;
@@ -1941,6 +1989,9 @@ if (window.location.hash && window.location.hash !== '#') {
 
 // CE-018: Listen for hash changes (back/forward navigation, shared links)
 window.addEventListener('hashchange', decodeHashToConfig);
+
+// CE-025: Load the full model library from ./models/*.json (async, swaps over fallbacks)
+loadModelLibrary();
 
 // ===== CE-019: Comparison mode =====
 let compareMode = false;

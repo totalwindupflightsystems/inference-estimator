@@ -1,0 +1,26 @@
+{
+  "id": "glm-5.2",
+  "name": "GLM 5.2",
+  "params": 744.0,
+  "arch": "moe",
+  "activeParams": 40.0,
+  "nLayers": 78.0,
+  "nKvHeads": 1.0,
+  "headDim": 576.0,
+  "hiddenSize": 6144.0,
+  "desc": "GLM 5.2 744B/~40B active MoE, 256 experts (top-8), MLA (kv_lora 512+rope 64), 1M ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 1.12,
+      "output": 3.52
+    },
+    "together": {
+      "input": 1.12,
+      "output": 3.52
+    },
+    "fireworks": {
+      "input": 1.008,
+      "output": 3.168
+    }
+  }
+}

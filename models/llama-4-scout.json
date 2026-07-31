@@ -1,0 +1,26 @@
+{
+  "id": "llama-4-scout",
+  "name": "Llama 4 Scout",
+  "params": 109.0,
+  "arch": "moe",
+  "activeParams": 17.0,
+  "nLayers": 48.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 5120.0,
+  "desc": "Llama 4 Scout 109B/17B active MoE, 16 experts, 48 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.1,
+      "output": 0.3
+    },
+    "together": {
+      "input": 0.1,
+      "output": 0.3
+    },
+    "fireworks": {
+      "input": 0.09,
+      "output": 0.27
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "qwen3-14b",
+  "name": "Qwen3 14B",
+  "params": 14.3,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 40.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 5120.0,
+  "desc": "Qwen3 14B dense, 40 layers, GQA",
+  "pricing": {
+    "openrouter": {
+      "input": 0.2275,
+      "output": 0.91
+    },
+    "together": {
+      "input": 0.2275,
+      "output": 0.91
+    },
+    "fireworks": {
+      "input": 0.2048,
+      "output": 0.819
+    }
+  }
+}

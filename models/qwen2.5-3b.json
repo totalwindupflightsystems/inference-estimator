@@ -1,0 +1,26 @@
+{
+  "id": "qwen2.5-3b",
+  "name": "Qwen2.5 3B",
+  "params": 3.1,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 36.0,
+  "nKvHeads": 2.0,
+  "headDim": 128.0,
+  "hiddenSize": 2048.0,
+  "desc": "Qwen2.5 3B dense, 36 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.03,
+      "output": 0.08
+    },
+    "together": {
+      "input": 0.03,
+      "output": 0.08
+    },
+    "fireworks": {
+      "input": 0.027,
+      "output": 0.072
+    }
+  }
+}

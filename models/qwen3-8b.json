@@ -1,0 +1,26 @@
+{
+  "id": "qwen3-8b",
+  "name": "Qwen3 8B",
+  "params": 8.2,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 36.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 4096.0,
+  "desc": "Qwen3 8B dense, 36 layers, GQA",
+  "pricing": {
+    "openrouter": {
+      "input": 0.117,
+      "output": 0.455
+    },
+    "together": {
+      "input": 0.117,
+      "output": 0.455
+    },
+    "fireworks": {
+      "input": 0.1053,
+      "output": 0.4095
+    }
+  }
+}

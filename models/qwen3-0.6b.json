@@ -1,0 +1,26 @@
+{
+  "id": "qwen3-0.6b",
+  "name": "Qwen3 0.6B",
+  "params": 0.6,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 28.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 1024.0,
+  "desc": "Qwen3 0.6B dense, 28 layers, GQA",
+  "pricing": {
+    "openrouter": {
+      "input": 0.01,
+      "output": 0.03
+    },
+    "together": {
+      "input": 0.01,
+      "output": 0.03
+    },
+    "fireworks": {
+      "input": 0.009,
+      "output": 0.027
+    }
+  }
+}

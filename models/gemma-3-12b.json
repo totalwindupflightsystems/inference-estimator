@@ -1,0 +1,26 @@
+{
+  "id": "gemma-3-12b",
+  "name": "Gemma 3 12B",
+  "params": 12.2,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 48.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 3840.0,
+  "desc": "Gemma 3 12B dense, 48 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.05,
+      "output": 0.15
+    },
+    "together": {
+      "input": 0.05,
+      "output": 0.15
+    },
+    "fireworks": {
+      "input": 0.045,
+      "output": 0.135
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "phi-4",
+  "name": "Phi-4",
+  "params": 14.7,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 32.0,
+  "nKvHeads": 16.0,
+  "headDim": 80.0,
+  "hiddenSize": 2560.0,
+  "desc": "Microsoft Phi-4 14.7B dense, 32 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.07,
+      "output": 0.2
+    },
+    "together": {
+      "input": 0.07,
+      "output": 0.2
+    },
+    "fireworks": {
+      "input": 0.063,
+      "output": 0.18
+    }
+  }
+}

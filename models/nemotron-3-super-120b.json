@@ -1,0 +1,26 @@
+{
+  "id": "nemotron-3-super-120b",
+  "name": "Nemotron 3 Super 120B",
+  "params": 120.0,
+  "arch": "moe",
+  "activeParams": 12.0,
+  "nLayers": 88.0,
+  "nKvHeads": 2.0,
+  "headDim": 128.0,
+  "hiddenSize": 4096.0,
+  "desc": "Nemotron 3 Super 120B/12B active MoE, 512 experts (top-22), 88 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.085,
+      "output": 0.4
+    },
+    "together": {
+      "input": 0.085,
+      "output": 0.4
+    },
+    "fireworks": {
+      "input": 0.0765,
+      "output": 0.36
+    }
+  }
+}

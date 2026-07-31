@@ -1,0 +1,26 @@
+{
+  "id": "gemma-3-27b",
+  "name": "Gemma 3 27B",
+  "params": 27.0,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 62.0,
+  "nKvHeads": 16.0,
+  "headDim": 128.0,
+  "hiddenSize": 5376.0,
+  "desc": "Gemma 3 27B dense, 62 layers, GQA (16 KV heads)",
+  "pricing": {
+    "openrouter": {
+      "input": 0.08,
+      "output": 0.45
+    },
+    "together": {
+      "input": 0.08,
+      "output": 0.45
+    },
+    "fireworks": {
+      "input": 0.072,
+      "output": 0.405
+    }
+  }
+}

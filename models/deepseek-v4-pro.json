@@ -1,0 +1,26 @@
+{
+  "id": "deepseek-v4-pro",
+  "name": "DeepSeek V4 Pro",
+  "params": 1600.0,
+  "arch": "moe",
+  "activeParams": 49.0,
+  "nLayers": 61.0,
+  "nKvHeads": 1.0,
+  "headDim": 512.0,
+  "hiddenSize": 7168.0,
+  "desc": "DeepSeek V4 Pro 1.6T/~49B active MoE, MLA, 384 experts (top-6), CSA+HCA, 1M ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.435,
+      "output": 0.87
+    },
+    "together": {
+      "input": 0.435,
+      "output": 0.87
+    },
+    "fireworks": {
+      "input": 0.3915,
+      "output": 0.783
+    }
+  }
+}

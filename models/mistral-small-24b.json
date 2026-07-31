@@ -1,0 +1,26 @@
+{
+  "id": "mistral-small-24b",
+  "name": "Mistral Small 24B",
+  "params": 24.0,
+  "arch": "dense",
+  "activeParams": null,
+  "nLayers": 52.0,
+  "nKvHeads": 8.0,
+  "headDim": 128.0,
+  "hiddenSize": 4096.0,
+  "desc": "Mistral Small 3.1 24B dense, 52 layers",
+  "pricing": {
+    "openrouter": {
+      "input": 0.1,
+      "output": 0.2
+    },
+    "together": {
+      "input": 0.1,
+      "output": 0.2
+    },
+    "fireworks": {
+      "input": 0.09,
+      "output": 0.18
+    }
+  }
+}
