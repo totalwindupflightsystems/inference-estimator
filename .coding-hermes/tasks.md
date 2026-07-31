@@ -683,3 +683,43 @@
 - Recommendation: PUT /api/v1/projects with cooldown_s=86400 to reduce noise on a completed project
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s→86400s (RECOMMENDED), Judge=PASS (tier2-null), BANKAI DONE — 3RD IDLE TICK
+
+## Tick #15 — 2026-07-31 07:28 UTC — Idle tick (4th, ESCALATED — cooldown increased to 86400s)
+
+**Ground Truth:**
+- Scheduler: CooldownS=86400 (UPDATED this tick from 900), DecayRate=0.0, Enabled=True, Weight=10, Priority=8 — API-verified
+- DuckBrain: 9 keys (identity + ticks 6/8/9/10/12/13/14/15), namespace `inference-estimator`
+- GitReins: 21 tasks (CE-001 through CE-021 all COMPLETE), 0 pending
+- Workdir: Clean
+
+**NEVER-DONE Audit (14-gate sweep):**
+
+| Gate | Status | Detail |
+|------|--------|--------|
+| 0 Scheduler | ✅ | CooldownS=86400, DecayRate=0.0, API-verified |
+| 1 Build | N/A | Static HTML — no build step |
+| 2 Tests | N/A | No test framework |
+| 3 Vet/Lint | N/A | Single HTML file |
+| 4 Formatter | N/A | Single file |
+| 5 TODOs/FIXMEs | ✅ | Zero in cluster-estimator.html (2381 lines) |
+| 6 Hilo | N/A | Static HTML — no supported source files |
+| 7 GitReins | ✅ | 21 complete, 0 pending, guard PASS |
+| 8 DuckBrain | ✅ | 9 keys, namespace active |
+| 9 CI | N/A | No GitHub Actions |
+| 10 Deps | N/A | Zero dependencies |
+| 11 Docs | ✅ | 9/9 — all community docs present |
+| 12 Middle-out | N/A | Not a Go project |
+| 13 E2E | ✅ | HTML: 2381 lines, 501/501 braces balanced, 1828/1828 parens balanced, 3 files, no stale artifacts |
+| 14 GitReins judge | ✅ | All 21 tasks: tier1 PASS, tier2 null (HTML project) |
+
+**Task Scan:**
+- 0 tasks remain — ALL 21 COMPLETE across 6 phases
+- 4 consecutive idle ticks (12, 13, 14, 15)
+- Cooldown escalated from 900s → 86400s (24h maintenance-only) via PUT /api/v1/projects/inference-estimator
+
+**ESCALATION EXECUTED:**
+- PUT /api/v1/projects/inference-estimator with CooldownS=86400 — confirmed at 2026-07-31T07:28:49Z
+- Project now runs at 24h intervals (maintenance-only mode)
+- No further foreman action expected unless new tasks are added or external discovery signals arrive
+
+**Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=86400s (ESCALATED), Judge=PASS (tier2-null), BANKAI DONE — MAINTENANCE ONLY
