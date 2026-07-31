@@ -1,0 +1,12 @@
+{
+  "name": "Inference Cluster Estimator",
+  "short_name": "Inf Estimator",
+  "description": "Estimate VRAM, KV cache, throughput, and cost for LLM inference clusters",
+  "start_url": "./cluster-estimator.html",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0d1117",
+  "background_color": "#0d1117",
+  "lang": "en",
+  "categories": ["developer tools", "utilities"]
+}

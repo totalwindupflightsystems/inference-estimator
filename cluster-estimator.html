@@ -110,9 +110,30 @@
     .compare-table th { background: #f0f0f0; }
     * { box-shadow: none !important; text-shadow: none !important; }
   }
+  /* CE-021: Offline indicator */
+  .offline-toast {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: var(--warn);
+    color: #000;
+    text-align: center;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    z-index: 9999;
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+  }
+  .offline-toast.show { transform: translateY(0); }
 </style>
+<meta name="theme-color" content="#0d1117">
+<link rel="manifest" href="manifest.json">
 </head>
 <body data-theme="dark">
+
+<div class="offline-toast" id="offline-toast">⚠ You are offline — showing cached content</div>
 
 <h1>Inference Cluster Estimator</h1>
 <p class="subtitle">Model params + quantization + context → VRAM, KV cache, sweet spot</p>
@@ -684,6 +705,30 @@ function detectSystemTheme() {
     theme = detectSystemTheme();
   }
   applyTheme(theme);
+})();
+
+// CE-021: Register Service Worker for offline support
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./service-worker.js')
+    .then(reg => console.log('SW registered:', reg.scope))
+    .catch(err => console.log('SW registration failed:', err));
+}
+
+// CE-021: Offline/online status indicator
+(function initOfflineIndicator() {
+  const toast = document.getElementById('offline-toast');
+  if (!toast) return;
+  function updateOnlineStatus() {
+    if (navigator.onLine) {
+      toast.classList.remove('show');
+    } else {
+      toast.classList.add('show');
+    }
+  }
+  window.addEventListener('online', updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+  // Show immediately if already offline
+  if (!navigator.onLine) toast.classList.add('show');
 })();
 
 // CE-013: tflops_bf16 = BF16/FP16 tensor performance for compute-bound prefill estimates
