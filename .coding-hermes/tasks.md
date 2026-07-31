@@ -32,7 +32,7 @@
 - [x] **CE-016**: Concurrent user modeling (requests/sec at target latency) — f5e8465
 
 ## Phase 6: Polish
-- [ ] **CE-017**: Dark/light theme toggle
+- [x] **CE-017**: Dark/light theme toggle
 - [ ] **CE-018**: Shareable URL (encode config in URL hash)
 - [ ] **CE-019**: Comparison mode (side-by-side two configs)
 - [ ] **CE-020**: Print-friendly CSS
@@ -396,5 +396,44 @@
 - Marked CE-015 complete in board (was committed by prior session but board not updated)
 - Created GitReins tasks for all 5 Phase 6 items (CE-017 through CE-021)
 - Replaced fabricated Tick #7 entry from sibling worker subagent with verified data
+
+**Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s, Judge=PASS (tier2-null for HTML project)
+## Tick #8 — 2026-07-31 02:47 UTC — CE-017 dispatched + completed (Phase 6: 1/5)
+
+**Ground Truth:**
+- Scheduler: CooldownS=900, DecayRate=0.0, Enabled=True, Weight=10, Priority=8 (API-verified)
+- DuckBrain: 3 keys (`identity` + `tick/6` + `tick/8`), namespace `inference-estimator` — recall confirmed (id=692308db)
+- GitReins: 22 tasks (CE-001 through CE-017 complete, CE-018 through CE-021 pending)
+- Workdir: Clean after CE-017 commit 65d61e2
+
+**NEVER-DONE Audit (14-gate sweep):**
+
+| Gate | Status | Detail |
+|------|--------|--------|
+| 0 Scheduler | ✅ | CooldownS=900, DecayRate=0.0, API-verified |
+| 1 Build | N/A | Static HTML |
+| 2 Tests | N/A | No test framework |
+| 3 Vet/Lint | N/A | Single HTML file |
+| 4 Formatter | N/A | Single file |
+| 5 TODOs/FIXMEs | ✅ | Zero in cluster-estimator.html (1639 lines) |
+| 6 Hilo | N/A | Static HTML — no supported source files |
+| 7 GitReins | ✅ | 22 tasks (17 complete, 4 pending, 1 newly complete), guard PASS |
+| 8 DuckBrain | ✅ | 3 keys, namespace active, recall confirmed |
+| 9 CI | N/A | No GitHub Actions |
+| 10 Deps | N/A | Zero dependencies |
+| 11 Docs | ✅ | 9/9 — all community docs present |
+| 12 Middle-out | N/A | Not a Go project |
+| 13 E2E | ✅ | HTML: 1639 lines, 341/341 braces balanced, 1121/1121 parens balanced, 12 theme refs, data-theme attribute, themeToggle button present |
+| 14 GitReins judge | ✅ | CE-017: tier1 PASS, tier2 null (HTML project) |
+
+**Task Scan:**
+- CE-017 ✅ dispatched + completed (worker, commit 65d61e2, +34 lines net, 1639 lines total)
+  - CSS: light theme CSS variables via `[data-theme="light"]` selector (white bg, dark text, GitHub-style palette)
+  - HTML: `<body data-theme="dark">` default, theme toggle button `☀️ Light` / `🌙 Dark` in btn-row
+  - JS: `applyTheme()`, `toggleTheme()`, `detectSystemTheme()` — localStorage key `cluster-estimator-theme`, `prefers-color-scheme` system detection on first visit
+  - All cards, fields, sliders, results, notes, compare-tables inherit CSS variables and recolor automatically
+  - GitReins: tier1 PASS (guard clean, secrets clean), task_complete applied
+- 4 tasks remain: CE-018 (URL), CE-019 (comparison), CE-020 (print), CE-021 (service worker)
+- CE-018 (shareable URL) ready for next productive tick
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s, Judge=PASS (tier2-null for HTML project)
