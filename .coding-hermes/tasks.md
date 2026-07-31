@@ -34,7 +34,7 @@
 ## Phase 6: Polish
 - [x] **CE-017**: Dark/light theme toggle
 - [x] **CE-018**: Shareable URL (encode config in URL hash) — 61df637
-- [ ] **CE-019**: Comparison mode (side-by-side two configs)
+- [x] **CE-019**: Comparison mode (side-by-side two configs)
 - [ ] **CE-020**: Print-friendly CSS
 - [ ] **CE-021**: Service Worker for offline use
 
@@ -476,5 +476,47 @@
   - Hash takes priority over localStorage auto-load on page load
 - 3 tasks remain: CE-019 (comparison mode), CE-020 (print CSS), CE-021 (service worker)
 - CE-019 (comparison mode — side-by-side two configs) ready for next productive tick
+
+**Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s, Judge=PASS (tier2-null for HTML project)
+## Tick #10 — 2026-07-31 05:50 UTC — CE-019 dispatched + completed (Phase 6: 3/5)
+
+**Ground Truth:**
+- Scheduler: CooldownS=900, DecayRate=0.0 (last DB-verified tick #9)
+- DuckBrain: 6 keys (identity + ticks 4/5/6/8/10), namespace `inference-estimator` — recall confirmed
+- GitReins: 22 tasks (CE-001 through CE-019 complete, CE-020 + CE-021 pending)
+- Workdir: .coding-hermes/tasks.md dirty (board update this tick)
+
+**NEVER-DONE Audit (14-gate sweep):**
+
+| Gate | Status | Detail |
+|------|--------|--------|
+| 0 Scheduler | ✅ | CooldownS=900, DecayRate=0.0 (last verified tick #9) |
+| 1 Build | N/A | Static HTML — no build step |
+| 2 Tests | N/A | No test framework |
+| 3 Vet/Lint | N/A | Single HTML file |
+| 4 Formatter | N/A | Single file |
+| 5 TODOs/FIXMEs | ✅ | Zero in cluster-estimator.html (2309 lines) |
+| 6 Hilo | N/A | Static HTML — no supported source files |
+| 7 GitReins | ✅ | 22 tasks (19 complete, 2 pending), guard PASS (secrets clean, lint passed) |
+| 8 DuckBrain | ✅ | 6 keys, namespace active |
+| 9 CI | N/A | No GitHub Actions |
+| 10 Deps | N/A | Zero dependencies |
+| 11 Docs | ✅ | 9/9 — all community docs present |
+| 12 Middle-out | N/A | Not a Go project |
+| 13 E2E | ✅ | 2309 lines, 368/367 braces (pre-existing -1), no duplicate IDs, 28 CE-019 feature refs |
+| 14 GitReins judge | ✅ | CE-019: tier1 PASS, tier2 null (HTML project — expected) |
+
+**Task Scan:**
+- CE-019 ✅ dispatched + completed (worker, commit 298b5d9, +619 lines, 2309 lines total)
+  - Split-pane layout: `#compareContainer` with two `.compare-pane` divs (Pane A / Pane B)
+  - Each pane contains full clone of all 12 config cards + results via dynamic DOM cloning
+  - ⚖ Compare button: toggles comparison mode on/off
+  - Per-pane Import, Copy between panes, Synced scrolling with guard flag
+  - Difference highlighting: `diffCheck()` compares 55+ fields, `.diff-highlight` CSS
+  - Per-pane recalculation with all metrics computed independently
+  - Pane-specific helpers for GPU specs, arch fields, cloud pricing, API models, presets
+  - GitReins: tier1 PASS, task_complete applied
+- 2 tasks remain: CE-020 (print CSS), CE-021 (service worker)
+- CE-020 (print-friendly CSS) ready for next productive tick
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=900s, Judge=PASS (tier2-null for HTML project)

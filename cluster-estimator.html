@@ -83,6 +83,33 @@
     #compareContainer { flex-direction: column; }
     .compare-pane { max-height: none; }
   }
+  /* CE-020: Print-friendly stylesheet */
+  @media print {
+    :root, [data-theme="dark"], [data-theme="light"] {
+      --bg: #fff !important;
+      --text: #000 !important;
+      --surface: #fff !important;
+      --border: #ccc !important;
+      --text-dim: #555 !important;
+      --accent: #000 !important;
+      --accent2: #000 !important;
+      --warn: #000 !important;
+      --danger: #000 !important;
+      --slider-track: #eee !important;
+    }
+    body { padding: 0.5in; max-width: none; }
+    h1, .subtitle { display: none !important; }
+    .btn-row, button, input, select, textarea,
+    #themeToggle, .status, .pane-btn-row { display: none !important; }
+    .grid { display: block; }
+    .card { break-inside: avoid; page-break-inside: avoid; }
+    .results { display: block; }
+    .results .metric { display: inline-block; width: auto; margin: 4px 8px; text-align: left; }
+    .metric .value { font-size: 1.2rem; }
+    .compare-table, .compare-table th, .compare-table td { border: 1px solid #000 !important; }
+    .compare-table th { background: #f0f0f0; }
+    * { box-shadow: none !important; text-shadow: none !important; }
+  }
 </style>
 </head>
 <body data-theme="dark">
