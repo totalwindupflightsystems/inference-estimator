@@ -6,6 +6,8 @@
 <title>Inference Cluster Estimator</title>
 <style>
   :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #c9d1d9; --text-dim: #8b949e; --accent: #58a6ff; --accent2: #3fb950; --warn: #d2991d; --danger: #f85149; --slider-track: #21262d; }
+  /* CE-017: Light theme */
+  [data-theme="light"] { --bg: #ffffff; --surface: #f6f8fa; --border: #d0d7de; --text: #24292f; --text-dim: #57606a; --accent: #0969da; --accent2: #1a7f37; --warn: #9a6700; --danger: #cf222e; --slider-track: #eaeef2; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; padding: 24px; max-width: 1200px; margin: 0 auto; }
   h1 { font-size: 1.5rem; margin-bottom: 4px; }
@@ -58,7 +60,7 @@
   .api-model-row.active .model-name { color: var(--accent); font-weight: 600; }
 </style>
 </head>
-<body>
+<body data-theme="dark">
 
 <h1>Inference Cluster Estimator</h1>
 <p class="subtitle">Model params + quantization + context → VRAM, KV cache, sweet spot</p>
@@ -69,6 +71,7 @@
   <button onclick="saveConfig()">Save to Browser</button>
   <button onclick="loadConfig()">Load Saved</button>
   <button class="primary" onclick="recalculate()">Recalculate</button>
+  <button id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark theme">☀️ Light</button>
   <span class="status" id="status">Saved ✓</span>
 </div>
 
@@ -568,6 +571,37 @@
 </div>
 
 <script>
+// CE-017: Theme toggle — dark/light with localStorage + system preference detection
+const THEME_KEY = 'cluster-estimator-theme';
+
+function applyTheme(theme) {
+  document.body.setAttribute('data-theme', theme);
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
+}
+
+function toggleTheme() {
+  const current = document.body.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  localStorage.setItem(THEME_KEY, next);
+}
+
+function detectSystemTheme() {
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  return 'light';
+}
+
+(function initTheme() {
+  let theme = localStorage.getItem(THEME_KEY);
+  if (!theme) {
+    theme = detectSystemTheme();
+  }
+  applyTheme(theme);
+})();
+
 // CE-013: tflops_bf16 = BF16/FP16 tensor performance for compute-bound prefill estimates
 const GPU_SPECS = {
   'H100-80':   { vram: 80,  bw: 3350, name: 'H100 80GB', price_hour: 2.50, tflops_bf16: 990 },
