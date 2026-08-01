@@ -4,6 +4,30 @@
 > WORK, not optional extensions. Do NOT self-pause while open tasks remain.
 > Bankai mode: all 6 phases. Every task must be completed.**
 
+## DATA CORRECTIONS 🔴
+- [x] **CE-022**: Fix DeepSeek V4 preset data — SPLIT into two presets with REAL specs (verified from HF config.json 2026-07-31):
+  - `deepseek-v4-pro`: 1600B total / 49B active, 61 layers, hidden 7168, 384 routed experts (top-6), 1 KV head (MLA), head dim 512, 1M ctx
+  - `deepseek-v4-flash`: 284B total / 13B active, 43 layers, hidden 4096, 256 routed experts (top-6), 1 KV head (MLA), head dim 512, 1M ctx
+  - REMOVE the old single `deepseek-v4` preset (was wrong: 685B total / 37B active — invented, no source)
+  - Update preset descriptions to note hybrid CSA+HCA attention + MLA compression
+  - Re-run node test harness (no NaN, sane GPU counts: V4-Pro ≈ 16-32× H100 @ Q4, V4-Flash ≈ 4-8×)
+  - GitReins task + tier1 PASS
+- [x] **CE-023**: Expand presets to 42 models with REAL specs — top Hugging Face LLMs (downloads leaderboard + config.json verified 2026-07-31):
+  - New families: Qwen3 (0.6B→32B dense + 30B-A3B MoE), Qwen3.5 (4B/9B), Qwen3.6 (27B + 35B-A3B MoE), Qwen2.5 (0.5B→72B), Llama 3.2/3.1/3.3 + Llama 4 Scout/Maverick, Gemma 3 (4B/12B/27B) + Gemma 4 (31B + 26B-A4B MoE), DeepSeek V3/V3.2/R1 + V4 Pro/Flash, GPT-OSS 20B/120B, Mistral Small 24B, GLM 5.2, MiniMax-M3, Nemotron 3 Super 120B, Granite 4.1, Phi-4
+  - Fixed WRONG existing presets: MiniMax-M3 (was 456B/45.9B/72L/8192 → real 428B/23B/60L/6144), Gemma-3-27B (was 46L/4608 → real 62L/5376/16KV), Llama-4 (was 400B/40B/126L → real 400B/17B/48L), Mistral-Large-2 (was 128 heads → real 96 heads/88L/12288)
+  - MLA models (DeepSeek V3/V3.2/R1, GLM 5.2) use KV head=1 + headDim=kv_lora+rope (576) for accurate KV cache
+  - API_PRICING rebuilt: 42 models × 3 providers with verified OpenRouter rates
+  - Node test harness: 26/26 presets PASS, zero NaN
+- [x] **CE-024**: Verify estimator UI on GitHub Pages after 42-preset deployment — dropdown renders all 42, filter works, applyPreset fills fields, comparison mode handles new keys, no console errors. Browser-verified end-to-end (not just node harness). ✅ VERIFIED tick #16 — all 7 browser checks PASS on deployed site (43 options incl. placeholder, 42 models, loader "Loaded 42 models", filter 16 MoE/26 dense, applyPreset fills all fields, comparison 2 panes, 0 console errors)
+- [x] **CE-025**: Dynamic model library — per-model JSON files loaded at runtime:
+  - `models/` directory: 42 JSON files, one per model (id, name, params, arch, activeParams, nLayers, nKvHeads, headDim, hiddenSize, desc, pricing per provider)
+  - `models/index.json` manifest listing all model IDs
+  - HTML refactored: hardcoded objects renamed to `FALLBACK_MODEL_PRESETS`/`FALLBACK_API_PRICING` (offline fallback), `loadModelLibrary()` fetches manifest + JSONs async and swaps into `MODEL_PRESETS`/`API_PRICING`, `refreshModelUI()` re-renders dropdown/pricing/results
+  - Service worker precaches `./models/index.json`
+  - **Adding a model = drop one JSON + manifest entry — no code edit**
+  - Node harness: "Loaded 42 models from library ✓", 42/42 presets PASS, 0 NaN
+  - Commit `09c4f4a` — pushed, GitReins tier1 PASS
+
 ## Phase 1: Model Presets ✅ — completed 2026-07-30 tick 1
 - [x] **CE-001**: Add model preset dropdown with common architectures — auto-fills params, layers, KV heads, head dim, hidden size
 - [x] **CE-002**: Presets stored as JSON object in JS, filterable by architecture type
@@ -32,6 +56,7 @@
 - [x] **CE-016**: Concurrent user modeling (requests/sec at target latency) — f5e8465
 
 ## Phase 6: Polish
+- [ ] **BOARD-V2**: Migrate board to DuckDB v2.1 — run `python3 ~/.hermes/scripts/migrate-board-to-duckdb.py .` (load skill coding-hermes-board first). Creates .coding-hermes/board/ (schema.sql, tasks.parquet, events.parquet), archives tasks.md → tasks.md.bak, commit. Same pattern as DuckBrain.
 - [x] **CE-017**: Dark/light theme toggle
 - [x] **CE-018**: Shareable URL (encode config in URL hash) — 61df637
 - [x] **CE-019**: Comparison mode (side-by-side two configs)
@@ -723,3 +748,4 @@
 - No further foreman action expected unless new tasks are added or external discovery signals arrive
 
 **Quality-gate line:** Hilo=N/A, GitReins=useful, DuckBrain=present, Docs=9/9, Cooldown=86400s (ESCALATED), Judge=PASS (tier2-null), BANKAI DONE — MAINTENANCE ONLY
+
