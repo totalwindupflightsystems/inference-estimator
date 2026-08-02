@@ -12,6 +12,11 @@ guards:
     enabled: false
   secrets:
     enabled: true
+  # No test framework in this static HTML/JS project — pytest exits 5
+  # ("no tests ran") which the guard treats as FAIL and blocks every
+  # staged commit (proven tick #20 2026-08-02). Tests gate = N/A per
+  # never-done audit. Re-enable if a real test suite lands.
+  tests: false
 
 defaults:
   model: deepseek-v4-flash
