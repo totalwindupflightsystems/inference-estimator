@@ -22,3 +22,6 @@
 dagger.db
 dagger.db-journal
 dagger.db-*
+
+# Build artifacts
+dist/
