@@ -28,3 +28,6 @@ dist/
 
 # Node.js dependencies (npm install)
 node_modules/
+
+# GitReins local state
+.gitreins/history/
