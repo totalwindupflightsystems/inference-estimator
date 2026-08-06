@@ -41,9 +41,14 @@ Quick, no-dependency estimation for LLM inference cluster provisioning. Run in a
 ```
 inference-estimator/
 ├── AGENTS.md
-├── cluster-estimator.html    # The tool
+├── CONTRIBUTING.md
+├── README.md
+├── cluster-estimator.html    # The tool (HTML + CSS + JS, single file)
+├── models/                   # Per-model JSON library (42 models + index.json)
+├── docs/                     # Formula reference, quick-start, input glossary
+├── test.js                   # Node regression harness (presets/roundtrip/edge cases)
 └── .coding-hermes/
-    └── tasks.md
+    └── board/                # Live task board (DuckDB v2 — schema.sql, tasks.parquet, events.parquet)
 ```
 
 ## DuckBrain
