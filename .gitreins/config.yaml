@@ -26,7 +26,7 @@ evaluator:
   model: deepseek-v4-flash
   max_iterations: 200
   max_time: 25m
-  max_input_tokens: 1M
+  max_input_tokens: 2M
   max_output_tokens: 100k
   file_scope: changed
   static_analysis_diagnostics: true
