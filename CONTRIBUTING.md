@@ -16,7 +16,19 @@ Thanks for your interest in contributing to the Inference Cluster Estimator!
 1. Fork the repo
 2. Make changes to `cluster-estimator.html`
 3. Open `cluster-estimator.html` in a browser to test
-4. Submit a PR
+4. Run the regression harness (see Testing below)
+5. Submit a PR
+
+## Testing
+
+The repo includes a Node regression harness (`test.js`) covering 42 preset applications, JSON export/import roundtrip, and edge cases.
+
+```bash
+npm install   # one-time (devDependencies)
+npm test      # runs test.js — 3 groups, ~1s
+```
+
+Requires Node 18+.
 
 ## Code Style
 

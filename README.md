@@ -17,6 +17,8 @@ Model params + quantization + context -> VRAM, KV cache, GPUs needed, sweet spot
 
 Open `cluster-estimator.html` in any browser. No dependencies, no build step.
 
+To run the regression suite (presets, roundtrip, edge cases): `npm install && npm test` (Node 18+).
+
 ## Architecture
 
 - Single-file HTML, dark theme
