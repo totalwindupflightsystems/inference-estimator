@@ -25,3 +25,6 @@ dagger.db-*
 
 # Build artifacts
 dist/
+
+# Node.js dependencies (npm install)
+node_modules/

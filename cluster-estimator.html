@@ -1355,7 +1355,7 @@ function recalculate() {
     : 0;
   const totalPerGpuGB = modelPerGpuGB * (1 + overhead) + kvPerGpuGB + prefixCachePerGpuGB;
   const gpusNeeded = Math.ceil(totalPerGpuGB / (gpu.vram * 0.90));
-  const serversNeeded = Math.ceil(gpusNeeded / gpusPerServer);
+  const serversNeeded = gpusPerServer > 0 ? Math.ceil(gpusNeeded / gpusPerServer) : 0;
 
   // CE-010: NVLink bandwidth matrix — cross-node TP/PP penalty
   // Cross-node TP: effective bandwidth = interNodeBw (much slower than NVLink)
@@ -2346,7 +2346,7 @@ function paneRecalculate(which) {
   const prefixCachePerGpuGB = servingEngine === 'sglang' ? sglangPrefixCacheSize / (servingMode === 'disaggregated' ? 1 : tp) : 0;
   const totalPerGpuGB = modelPerGpuGB * (1 + overhead) + kvPerGpuGB + prefixCachePerGpuGB;
   const gpusNeeded = Math.ceil(totalPerGpuGB / (gpu.vram * 0.90));
-  const serversNeeded = Math.ceil(gpusNeeded / gpusPerServer);
+  const serversNeeded = gpusPerServer > 0 ? Math.ceil(gpusNeeded / gpusPerServer) : 0;
 
   const bwRatio = nvlinkInterNodeBw > 0 ? nvlinkIntraNodeBw / nvlinkInterNodeBw : 1;
   let nvlinkGpuPenalty = 1.0;
