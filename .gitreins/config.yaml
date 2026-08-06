@@ -24,8 +24,8 @@ defaults:
 
 evaluator:
   model: deepseek-v4-flash
-  max_iterations: 30
-  max_time: 10m
+  max_iterations: 200
+  max_time: 25m
   max_input_tokens: 500k
   max_output_tokens: 100k
   file_scope: changed
