@@ -48,7 +48,7 @@ inference-estimator/
 ├── docs/                     # Formula reference, quick-start, input glossary
 ├── test.js                   # Node regression harness (presets/roundtrip/edge cases)
 └── .coding-hermes/
-    └── board/                # Live task board (DuckDB v2 — schema.sql, tasks.parquet, events.parquet)
+    └── board/                # Live task board (JSONL store — tasks.jsonl + events.jsonl)
 ```
 
 ## DuckBrain
