@@ -7,7 +7,6 @@
 .vfs/graph/.last_warm
 
 # Foreman temp scripts
-.coding-hermes/
 !.coding-hermes/tasks.md
 
 # Secrets
@@ -31,3 +30,8 @@ node_modules/
 
 # GitReins local state
 .gitreins/history/
+
+.coding-hermes/board/board.db
+.coding-hermes/board/board.db.wal
+.coding-hermes/board/*.parquet
+.coding-hermes/board/*.duckdb
