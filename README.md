@@ -19,6 +19,28 @@ Open `cluster-estimator.html` in any browser. No dependencies, no build step.
 
 To run the regression suite (presets, roundtrip, edge cases): `npm install && npm test` (Node 18+).
 
+## Distribution
+
+Two distributions ship from this repo:
+
+- **`cluster-estimator.html`** (default) — fetches the 42 per-model JSONs from
+  `models/` at runtime. Requires an HTTP server (or the GitHub Pages deploy);
+  `file://` falls back to a small embedded preset list.
+- **`dist/inference-estimator-standalone.html`** — 166 KB self-contained build
+  with all 42 model presets inlined. Zero network requests, works from
+  `file://` (double-click to open offline). The better distribution for local
+  / air-gapped use.
+
+### Regenerating the standalone build
+
+```sh
+node scripts/build-standalone.js   # reads cluster-estimator.html + models/*.json
+node scripts/verify-standalone.js  # optional: proves 42 models load offline
+```
+
+`dist/` is gitignored build output — regenerate after any change to
+`cluster-estimator.html` or `models/`.
+
 ## Architecture
 
 - Single-file HTML, dark theme

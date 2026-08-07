@@ -27,15 +27,17 @@ Quick, no-dependency estimation for LLM inference cluster provisioning. Run in a
 - Cluster-level aggregation (servers × GPUs per server)
 - tokens/$ estimate based on memory bandwidth and GPU pricing
 - System RAM & NVMe cache estimates
+- Model library presets (42 models: Llama, DeepSeek, Mixtral, Phi, Granite, …) with per-provider API pricing (OpenRouter/Together/Fireworks)
+- Serving engine overhead models: vLLM, SGLang, TGI (KV waste, prefill/batch efficiency)
+- Speculative decoding throughput estimates
+- Multi-node interconnect topology: NVLink/NVSwitch and InfiniBand (intra/inter-node bandwidth)
+- Prefill throughput separate from decode (monolithic vs disaggregated serving, CE-013)
+- Continuous batching efficiency curves
 
 ## Deferred / Future
-- Pricing integration (real-time cloud GPU pricing)
-- vLLM/SGLang/TGI serving overhead models
-- Speculative decoding throughput estimates
-- Multi-node NVLink/NVSwitch topology modeling
-- Prompt processing (prefill) throughput separate from decode
-- Continuous batching efficiency curves
-- Model list presets (Llama, DeepSeek, Mixtral, etc.)
+- Live cloud GPU pricing (real-time fetch; pricing tables are currently static)
+- Training cost estimation (tool is inference-focused)
+- Data-center power draw / electricity cost estimation
 
 ## File Layout
 ```
@@ -46,6 +48,8 @@ inference-estimator/
 ├── cluster-estimator.html    # The tool (HTML + CSS + JS, single file)
 ├── models/                   # Per-model JSON library (42 models + index.json)
 ├── docs/                     # Formula reference, quick-start, input glossary
+├── scripts/                  # build-standalone.js + verify-standalone.js
+├── dist/                     # Build output — standalone build (gitignored)
 ├── test.js                   # Node regression harness (presets/roundtrip/edge cases)
 └── .coding-hermes/
     └── board/                # Live task board (JSONL store — tasks.jsonl + events.jsonl)
