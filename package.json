@@ -2,7 +2,6 @@
   "name": "inference-estimator",
   "version": "1.0.0",
   "description": "Single-page static HTML tool for GPU cluster sizing estimation.",
-  "main": "service-worker.js",
   "scripts": {
     "test": "node test.js"
   },
@@ -12,7 +11,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/totalwindupflightsystems/inference-estimator/issues"
   },
