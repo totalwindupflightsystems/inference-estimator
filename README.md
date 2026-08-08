@@ -17,7 +17,7 @@ Model params + quantization + context -> VRAM, KV cache, GPUs needed, sweet spot
 
 Open `cluster-estimator.html` in any browser. No dependencies, no build step.
 
-Full pricing features (cloud GPU pricing, API cost comparison) need the runtime-fetched model data, so serve the repo over HTTP: `python3 -m http.server 8000` then open http://localhost:8000/cluster-estimator.html. A `file://` URL loads only the embedded preset list (no API pricing) -- for `file://`/offline use, open `dist/inference-estimator-standalone.html` instead (see Distribution).
+Full pricing features (cloud GPU pricing, API cost comparison) need the runtime-fetched model data, so serve the repo over HTTP: `python3 -m http.server 8000` then open http://localhost:8000/cluster-estimator.html. A `file://` URL uses the embedded fallback data (all 42 model presets and API pricing included), but cannot pick up live updates from `models/` -- for the best `file://`/offline experience, open `dist/inference-estimator-standalone.html` instead (see Distribution).
 
 To run the regression suite (presets, roundtrip, edge cases): `npm install && npm test` (Node 18+).
 
@@ -27,7 +27,8 @@ Two distributions ship from this repo:
 
 - **`cluster-estimator.html`** (default) — fetches the 42 per-model JSONs from
   `models/` at runtime. Requires an HTTP server (or the GitHub Pages deploy);
-  `file://` falls back to a small embedded preset list.
+  `file://` uses the embedded fallback (all 42 presets + API pricing baked in,
+  no live updates).
 - **`dist/inference-estimator-standalone.html`** — 166 KB self-contained build
   with all 42 model presets inlined. Zero network requests, works from
   `file://` (double-click to open offline). The better distribution for local

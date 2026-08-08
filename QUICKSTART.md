@@ -18,10 +18,10 @@ served experience.)
 ## Opening directly (file://)
 
 Double-clicking `cluster-estimator.html` from the filesystem also opens the
-page, but `file://` cannot fetch `models/*.json` -- the page silently falls
-back to a small embedded preset list (no API pricing) and logs a console
-warning. For full offline use from `file://`, use the self-contained
-standalone build instead:
+page. `file://` cannot fetch `models/*.json`, so the page uses its embedded
+fallback -- all 42 model presets and API pricing are baked in, and it logs a
+console warning that live model updates are unavailable. For full offline use
+from `file://`, use the self-contained standalone build instead:
 
 ```sh
 node scripts/build-standalone.js   # regenerates dist/inference-estimator-standalone.html
