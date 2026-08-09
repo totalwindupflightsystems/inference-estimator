@@ -6,7 +6,9 @@ const PRECACHE_URLS = [
   './',
   './cluster-estimator.html',
   './manifest.json',
-  './models/index.json'
+  './models/index.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 // Precache all per-model JSONs by reading index.json at install time.

@@ -10,10 +10,12 @@
  *
  * Loads the single-file tool via jsdom (with a fetch polyfill that serves
  * models/*.json from disk), waits for MODEL_PRESETS to populate (42 entries),
- * then exercises three test groups:
+ * then exercises four test groups:
  *   1. Presets  — all 42 model presets produce finite rendered numbers
  *   2. Roundtrip — getConfig → JSON → setConfig → getConfig is lossless
  *   3. Edge     — 0 GPUs, 1B params, FP32 quant, 1M context → finite outputs
+ *   4. GAP regressions — IE-GAP-011..014 (TP×PP floor, cloud fallback warning,
+ *      poisoned-import finiteness, manifest PWA icons)
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -323,6 +325,72 @@ function deepEqual(a, b) {
   }
 
   group('Edge cases', edgeAllFinite, edgeResults.join('; '));
+
+  // ===== TEST GROUP 4: IE-GAP regressions (011-014) =====
+  const gapResults = [];
+  let gapAllPass = true;
+  function gapCheck(name, ok, detail) {
+    if (!ok) gapAllPass = false;
+    gapResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+  }
+
+  // (a) IE-GAP-011: TP×PP floor — TP=8 must never report fewer than 8 GPUs
+  applyPresetByKey(win, doc, manifest.models[0]);
+  setInput(win, doc, 'tpSize', '8');
+  setInput(win, doc, 'ppSize', '1');
+  win.recalculate();
+  {
+    const el = doc.getElementById('rGpusNeeded');
+    const v = parseInt(el.textContent, 10);
+    gapCheck('TP floor', Number.isFinite(v) && v >= 8, `TP=8 PP=1 → GPUs Needed=${el.textContent}`);
+  }
+  setInput(win, doc, 'tpSize', '1');
+
+  // (b) IE-GAP-012: cloud fallback warning — L40S-48 + Lambda (not listed) must warn;
+  //     H100-80 + Lambda (listed) must NOT warn.
+  setInput(win, doc, 'gpuModel', 'L40S-48');
+  setInput(win, doc, 'cloudProvider', 'Lambda');
+  win.recalculate();
+  {
+    const warn = doc.getElementById('cloudFallbackWarn');
+    const shown = warn && warn.style.display !== 'none';
+    const marker = (doc.getElementById('cloudPriceTable').innerHTML || '').includes('spec price');
+    gapCheck('Cloud fallback warning', !!(shown && marker), `warn visible=${!!shown} amber marker=${marker}`);
+  }
+  setInput(win, doc, 'gpuModel', 'H100-80');
+  win.recalculate();
+  {
+    const warn = doc.getElementById('cloudFallbackWarn');
+    gapCheck('Listed GPU no warning', !!(warn && warn.style.display === 'none'), `warn display=${warn ? warn.style.display : 'missing'}`);
+  }
+
+  // (c) IE-GAP-013: poisoned import — tpSize:0 / ppSize:0 must not render NaN/Infinity
+  applyPresetByKey(win, doc, manifest.models[0]);
+  {
+    const cfg = win.getConfig();
+    cfg.tpSize = 0;
+    cfg.ppSize = 0;
+    win.setConfig(cfg);
+    win.recalculate();
+    const nums = collectRenderedNumbers(doc);
+    const bad = nums.filter((n) => !Number.isFinite(n.value));
+    const literal = [...doc.querySelectorAll('.metric .value')].filter((el) => /NaN|Infinity/.test(el.textContent));
+    gapCheck('Poisoned import finite',
+      bad.length === 0 && literal.length === 0,
+      `non-finite=${bad.map((b) => b.label).join(',') || 'none'} literal=${literal.map((el) => el.id).join(',') || 'none'}`);
+  }
+
+  // (d) IE-GAP-014: manifest icons present and on disk
+  {
+    const mf = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
+    const icons = mf.icons || [];
+    const sizes = icons.map((i) => i.sizes);
+    const filesOk = icons.length > 0 && icons.every((i) => fs.existsSync(path.join(ROOT, i.src)));
+    gapCheck('Manifest icons', sizes.includes('192x192') && sizes.includes('512x512') && filesOk,
+      `sizes=${sizes.join(',')} files=${icons.map((i) => fs.existsSync(path.join(ROOT, i.src))).join(',')}`);
+  }
+
+  group('GAP regressions', gapAllPass, gapResults.join('; '));
 
   // ===== Summary =====
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);

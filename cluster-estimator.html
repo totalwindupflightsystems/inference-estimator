@@ -552,6 +552,7 @@
     <div class="field" style="margin-top:12px">
       <label>Cluster Cost Estimate</label>
       <div style="font-size:1.3rem;font-weight:700;color:var(--accent2)" id="rCloudCost">—</div>
+      <div id="cloudFallbackWarn" style="display:none;margin-top:6px;color:#d29922;font-size:0.85rem">⚠ No cloud rate listed for this GPU/provider — showing spec-list price. Verify before budgeting.</div>
     </div>
   </div>
 
@@ -1095,6 +1096,11 @@ function updateCloudPricing() {
     const highlight = key === selGpu ? 'color:var(--accent);font-weight:600' : '';
     html += `<span style="${highlight}">  ${gpuName}: ${priceStr}</span><br>`;
   }
+  // IE-GAP-012: amber warning when the selected GPU has no listed cloud rate
+  if (selGpu && selGpu !== 'custom' && (p.gpus[selGpu] === null || p.gpus[selGpu] === undefined)) {
+    const spec = GPU_SPECS[selGpu];
+    html += `<span style="color:#d29922">  ⚠ ${spec ? spec.name : selGpu}: using spec price $${(spec ? spec.price_hour : 0).toFixed(2)}/hr — not listed by this provider</span><br>`;
+  }
   document.getElementById('cloudPriceTable').innerHTML = html;
 }
 
@@ -1189,8 +1195,9 @@ function recalculate() {
   const gpusPerServer = parseInt(document.getElementById('gpuPerServer').value);
   const numServers = parseInt(document.getElementById('numServers').value);
   const servingMode = document.getElementById('servingMode').value;
-  const tp = parseInt(document.getElementById('tpSize').value);
-  const pp = parseInt(document.getElementById('ppSize').value);
+  // IE-GAP-013: clamp TP/PP to >=1 — zero/NaN parallelism must never reach the math
+  const tp = Math.max(1, parseInt(document.getElementById('tpSize').value) || 1);
+  const pp = Math.max(1, parseInt(document.getElementById('ppSize').value) || 1);
   const gpu = getGpuSpec();
 
   // CE-013: Prefill throughput fields
@@ -1354,7 +1361,8 @@ function recalculate() {
     ? sglangPrefixCacheSize / (servingMode === 'disaggregated' ? 1 : tp)
     : 0;
   const totalPerGpuGB = modelPerGpuGB * (1 + overhead) + kvPerGpuGB + prefixCachePerGpuGB;
-  const gpusNeeded = Math.ceil(totalPerGpuGB / (gpu.vram * 0.90));
+  // IE-GAP-011: TP×PP floor — a TP×PP config physically needs at least tp*pp GPUs
+  const gpusNeeded = Math.max(Math.ceil(totalPerGpuGB / (gpu.vram * 0.90)), Math.max(1, tp) * Math.max(1, pp));
   const serversNeeded = gpusPerServer > 0 ? Math.ceil(gpusNeeded / gpusPerServer) : 0;
 
   // CE-010: NVLink bandwidth matrix — cross-node TP/PP penalty
@@ -1462,9 +1470,9 @@ function recalculate() {
   // Cloud pricing cost estimate
   const provider = document.getElementById('cloudProvider').value;
   const gpuKey = document.getElementById('gpuModel').value === 'custom' ? null : document.getElementById('gpuModel').value;
-  const cloudPricePerGpu = (gpuKey && CLOUD_PRICING[provider] && CLOUD_PRICING[provider].gpus[gpuKey] !== null && CLOUD_PRICING[provider].gpus[gpuKey] !== undefined)
-    ? CLOUD_PRICING[provider].gpus[gpuKey]
-    : gpu.price_hour;
+  // IE-GAP-012: distinguish a real cloud rate from a silent spec-price fallback
+  const cloudPriceInTable = !!(gpuKey && CLOUD_PRICING[provider] && CLOUD_PRICING[provider].gpus[gpuKey] !== null && CLOUD_PRICING[provider].gpus[gpuKey] !== undefined);
+  const cloudPricePerGpu = cloudPriceInTable ? CLOUD_PRICING[provider].gpus[gpuKey] : gpu.price_hour;
   const clusterCostPerHour = cloudPricePerGpu * gpusNeeded;
 
   // CE-013: Compute-bound prefill throughput (tokens/sec per GPU)
@@ -1514,6 +1522,9 @@ function recalculate() {
   document.getElementById('rTokensPerDollar').textContent = tokDollarFormatted;
   document.getElementById('rCostPerHour').textContent = '$' + clusterCostPerHour.toFixed(2) + '/hr';
   document.getElementById('rCloudCost').textContent = '$' + clusterCostPerHour.toFixed(2) + '/hr';
+  // IE-GAP-012: surface the spec-price fallback instead of hiding it
+  const cloudWarn = document.getElementById('cloudFallbackWarn');
+  if (cloudWarn) cloudWarn.style.display = (gpuKey && !cloudPriceInTable) ? '' : 'none';
 
   // CE-005: Cost per 1M tokens
   document.getElementById('rCostInput').textContent = '$' + costPer1MInput.toFixed(2) + '/1M tok';
@@ -1840,10 +1851,25 @@ function getConfig() {
 function setConfig(cfg) {
   for (const [k, v] of Object.entries(cfg)) {
     const el = document.getElementById(k);
-    if (el) {
-      if (el.type === 'checkbox') el.checked = v;
-      else el.value = v;
+    if (!el) continue;
+    if (el.type === 'checkbox') { el.checked = !!v; continue; }
+    // IE-GAP-013: sanitize numeric inputs — poisoned shared links / imported
+    // JSON (tpSize:0, NaN, Infinity) must never reach the estimator math.
+    if (el.type === 'number' || el.type === 'range') {
+      const n = (typeof v === 'number') ? v : parseFloat(v);
+      if (!Number.isFinite(n)) {
+        // NaN/Infinity/'' → fall back to the input's minimum, else 1
+        const lo = (el.min !== '' && el.min != null) ? parseFloat(el.min) : NaN;
+        el.value = Number.isFinite(lo) ? lo : 1;
+        continue;
+      }
+      // Clamp up to the minimum only (0/negatives are never legitimate). The max
+      // attribute is a UI hint — preset specs may legitimately exceed it (headDim 576).
+      const lo = (el.min !== '' && el.min != null) ? parseFloat(el.min) : NaN;
+      el.value = (Number.isFinite(lo) && n < lo) ? lo : v;
+      continue;
     }
+    el.value = v;
   }
   updateGpuSpecs();
   updateArchFields();
@@ -2105,7 +2131,22 @@ function paneGetConfig(which) {
 function paneSetConfig(which, cfg) {
   for (const [k, v] of Object.entries(cfg)) {
     const elem = pe(which, k);
-    if (elem) { if (elem.type === 'checkbox') elem.checked = v; else elem.value = v; }
+    if (!elem) continue;
+    if (elem.type === 'checkbox') { elem.checked = !!v; continue; }
+    // IE-GAP-013: sanitize numeric inputs (compare panes)
+    if (elem.type === 'number' || elem.type === 'range') {
+      const n = (typeof v === 'number') ? v : parseFloat(v);
+      if (!Number.isFinite(n)) {
+        const lo = (elem.min !== '' && elem.min != null) ? parseFloat(elem.min) : NaN;
+        elem.value = Number.isFinite(lo) ? lo : 1;
+        continue;
+      }
+      // Clamp up to the minimum only; the max attribute is a UI hint (preset specs may exceed it).
+      const lo = (elem.min !== '' && elem.min != null) ? parseFloat(elem.min) : NaN;
+      elem.value = (Number.isFinite(lo) && n < lo) ? lo : v;
+      continue;
+    }
+    elem.value = v;
   }
   paneUpdateGpuSpecs(which);
   paneUpdateArchFields(which);
@@ -2155,6 +2196,11 @@ function paneUpdateCloudPricing(which) {
     const priceStr = price !== null ? `$${price.toFixed(2)}/hr` : 'N/A';
     const highlight = key === gpuVal ? 'color:var(--accent);font-weight:600' : '';
     html += `<span style="${highlight}">  ${gpuName}: ${priceStr}</span><br>`;
+  }
+  // IE-GAP-012: amber warning when the selected GPU has no listed cloud rate (pane)
+  if (gpuVal && gpuVal !== 'custom' && (p.gpus[gpuVal] === null || p.gpus[gpuVal] === undefined)) {
+    const spec = GPU_SPECS[gpuVal];
+    html += `<span style="color:#d29922">  ⚠ ${spec ? spec.name : gpuVal}: using spec price $${(spec ? spec.price_hour : 0).toFixed(2)}/hr — not listed by this provider</span><br>`;
   }
   const cpt = pe(which,'cloudPriceTable'); if (cpt) cpt.innerHTML = html;
 }
@@ -2237,8 +2283,9 @@ function paneRecalculate(which) {
   const gpusPerServer = parseInt(cfg.gpuPerServer);
   const numServers = parseInt(cfg.numServers);
   const servingMode = cfg.servingMode;
-  const tp = parseInt(cfg.tpSize);
-  const pp = parseInt(cfg.ppSize);
+  // IE-GAP-013: clamp TP/PP to >=1 (compare pane)
+  const tp = Math.max(1, parseInt(cfg.tpSize) || 1);
+  const pp = Math.max(1, parseInt(cfg.ppSize) || 1);
 
   let gpu;
   const gpuModel = cfg.gpuModel;
@@ -2345,7 +2392,8 @@ function paneRecalculate(which) {
   const kvPerGpuGB = servingMode === 'disaggregated' ? kvEngineOverhead : kvEngineOverhead / tp;
   const prefixCachePerGpuGB = servingEngine === 'sglang' ? sglangPrefixCacheSize / (servingMode === 'disaggregated' ? 1 : tp) : 0;
   const totalPerGpuGB = modelPerGpuGB * (1 + overhead) + kvPerGpuGB + prefixCachePerGpuGB;
-  const gpusNeeded = Math.ceil(totalPerGpuGB / (gpu.vram * 0.90));
+  // IE-GAP-011: TP×PP floor (compare pane)
+  const gpusNeeded = Math.max(Math.ceil(totalPerGpuGB / (gpu.vram * 0.90)), Math.max(1, tp) * Math.max(1, pp));
   const serversNeeded = gpusPerServer > 0 ? Math.ceil(gpusNeeded / gpusPerServer) : 0;
 
   const bwRatio = nvlinkInterNodeBw > 0 ? nvlinkIntraNodeBw / nvlinkInterNodeBw : 1;
