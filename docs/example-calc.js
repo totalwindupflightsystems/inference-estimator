@@ -116,7 +116,7 @@ function recalculate() {
   const kvPerGpuGB = I.servingMode === 'disaggregated' ? kvEngineOverhead : kvEngineOverhead / I.tp;
   const prefixCachePerGpuGB = 0; // not sglang
   const totalPerGpuGB = modelPerGpuGB * (1 + I.overhead) + kvPerGpuGB + prefixCachePerGpuGB;
-  const gpusNeeded = Math.ceil(totalPerGpuGB / (gpu.vram * 0.90));
+  const gpusNeeded = Math.max(Math.ceil(totalPerGpuGB / (gpu.vram * 0.90)), I.tp * I.pp);
   const serversNeeded = Math.ceil(gpusNeeded / I.gpusPerServer);
 
   // ── Cluster metrics ──

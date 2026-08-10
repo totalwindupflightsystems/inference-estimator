@@ -16,6 +16,9 @@
  *   3. Edge     — 0 GPUs, 1B params, FP32 quant, 1M context → finite outputs
  *   4. GAP regressions — IE-GAP-011..014 (TP×PP floor, cloud fallback warning,
  *      poisoned-import finiteness, manifest PWA icons)
+ *   5. Math known-answers — IE-GAP-016 (DeepSeek V3 worked example from
+ *      QUICKSTART.md: modelMemGB ≈ 23.9, KV cache ≈ 42.4, GPUs Needed = 8,
+ *      decode throughput ≈ 1523 — catches formula breakage like a dropped ×2)
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -391,6 +394,49 @@ function deepEqual(a, b) {
   }
 
   group('GAP regressions', gapAllPass, gapResults.join('; '));
+
+  // ===== TEST GROUP 5: Math known-answers (IE-GAP-016) =====
+  // Known-answer regression: the DeepSeek V3 worked example from
+  // docs/QUICKSTART.md. Values are produced by the REAL recalculate() in
+  // cluster-estimator.html and cross-checked against docs/example-calc.js.
+  // If a formula breaks (e.g. dropping the ×2 K+V multiplier in
+  // kvPerTokenBytes), these assertions must FAIL with a numeric mismatch.
+  const mathResults = [];
+  let mathAllPass = true;
+  function mathCheck(name, ok, detail) {
+    if (!ok) mathAllPass = false;
+    mathResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+  }
+
+  applyPresetByKey(win, doc, 'deepseek-v3');
+  setInput(win, doc, 'context', '32768');
+  setInput(win, doc, 'batchSize', '8');
+  setInput(win, doc, 'overhead', '15');
+  setInput(win, doc, 'quant', '4.5');
+  setInput(win, doc, 'kvPrecision', '16');
+  setInput(win, doc, 'tpSize', '8');
+  setInput(win, doc, 'ppSize', '1');
+  setInput(win, doc, 'gpuModel', 'H100-80');
+  setInput(win, doc, 'cloudProvider', 'Lambda');
+  setInput(win, doc, 'servingEngine', 'vllm');
+  win.recalculate();
+  {
+    const num = (id) => { const v = parseFloat(doc.getElementById(id).textContent); return v; };
+    const modelMem = num('rModelMem');
+    mathCheck('Model memory ≈ 23.9 GB', Math.abs(modelMem - 23.93) < 0.5,
+      `rModelMem=${modelMem} (expected ≈23.9)`);
+    const kvCache = num('rKvCache');
+    mathCheck('KV cache ≈ 42.4 GB', Math.abs(kvCache - 42.37) < 1.0,
+      `rKvCache=${kvCache} (expected ≈42.4 — catches dropped ×2 K+V)`);
+    const gpus = num('rGpusNeeded');
+    mathCheck('GPUs Needed = 8', gpus === 8,
+      `rGpusNeeded=${gpus} (expected 8 — TP×PP floor)`);
+    const decode = num('rDecodeThroughput');
+    mathCheck('Decode throughput ≈ 1523 tok/s', Math.abs(decode - 1523) < 10,
+      `rDecodeThroughput=${decode} (expected ≈1523)`);
+  }
+
+  group('Math known-answers', mathAllPass, mathResults.join('; '));
 
   // ===== Summary =====
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);

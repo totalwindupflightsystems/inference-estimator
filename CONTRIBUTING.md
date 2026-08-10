@@ -9,7 +9,7 @@ Thanks for your interest in contributing to the Inference Cluster Estimator!
 - `docs/` — Formula reference, quick-start, input glossary
 - `test.js` — Node regression harness (presets/roundtrip/edge cases)
 - `specs/` — Implementation specifications
-- `.coding-hermes/board/` — Live task board (DuckDB v2: schema.sql, tasks.parquet, events.parquet)
+- `.coding-hermes/board/` — Live task board (JSONL canonical: tasks.jsonl + events.jsonl + schema.sql; board.db and *.parquet are gitignored rebuildable caches)
 
 ## Development
 

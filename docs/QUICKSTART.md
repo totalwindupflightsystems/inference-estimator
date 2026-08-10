@@ -10,7 +10,11 @@ verify).
 ## How to Use (5-Step Summary)
 
 1. **Open** `cluster-estimator.html` in any browser (double-click or
-   `file://` URL — no server needed).
+   `file://` URL — no server needed). Note: from `file://` the tool runs on
+   its embedded fallback data — all 42 presets and API pricing are baked in,
+   but live model updates are unavailable (a console warning explains this).
+   Serve the directory over HTTP (`python3 -m http.server 8000`) for the full
+   live-update experience.
 2. **Select a model preset** from the dropdown (or enter parameters manually).
 3. **Set context, batch, and quantization** to match your deployment scenario.
 4. **Choose your GPU model, TP/PP, and server count.**
@@ -109,16 +113,15 @@ The **Results** panel shows these values (all verified against
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **GPUs Needed** | **1** | ceil(59.55 / (80 × 0.90)) = ceil(0.827) = 1 |
-| **Servers Needed** | **1** | |
+| **GPUs Needed** | **8** | max(ceil(59.55 / (80 × 0.90)), 8 × 1) = max(1, 8) = 8 — TP×PP floor (IE-GAP-011) |
+| **Servers Needed** | **1** | ceil(8 / 8) = 1 |
 | **Total Cluster VRAM** | **640 GB** | 8 GPUs × 80 GB |
-| **Sweet Spot** | **Oversized: 7 spare GPU(s)** | 8 configured - 1 needed = 7 spare |
+| **Sweet Spot** | **Tight fit — no headroom** | 8 configured − 8 needed = 0 spare |
 
-The tool reports that only 1 GPU is needed per parallelism group, but since
-TP=8 requires all 8 GPUs to be present, the cluster has 7 spare GPUs beyond
-what the memory calculation strictly demands. In practice, all 8 GPUs are
-used for the TP=8 shard — the "spare" count reflects that the model + KV
-cache fit in less than one GPU's worth of memory across the TP group.
+The memory calculation alone fits in a single H100 (ceil(59.55 / (80 × 0.90))
+= 1 GPU), but TP=8 × PP=1 requires all 8 GPUs to be present — the tool
+enforces this floor (gpusNeeded = max(VRAM-fit, TP × PP), IE-GAP-011). All 8
+GPUs are used for the TP=8 shard, so the cluster has no spare capacity.
 
 #### System Resources
 
@@ -149,9 +152,9 @@ cache fit in less than one GPU's worth of memory across the TP group.
 
 | Metric | Value | Formula |
 |--------|-------|---------|
-| **Est. Cost/hr** | **$2.49/hr** | $2.49 × 1 GPU (Lambda Labs H100 price) |
-| **Input Cost** | **$0.01/1M tok** | (1M / 80865 / 3600) × $2.49 × 1 |
-| **Output Cost** | **$0.45/1M tok** | (1M / 1523 / 3600) × $2.49 × 1 |
+| **Est. Cost/hr** | **$19.92/hr** | $2.49 × 8 GPUs (Lambda Labs H100 price) |
+| **Input Cost** | **$0.07/1M tok** | (1M / 80865 / 3600) × $2.49 × 8 |
+| **Output Cost** | **$3.63/1M tok** | (1M / 1523 / 3600) × $2.49 × 8 |
 
 #### Speculative Decoding
 
@@ -180,11 +183,11 @@ bandwidth utilization limit.
 
 | Metric | Self-Hosted | API (OpenRouter) |
 |--------|------------|------------------|
-| Input ($/1M tok) | $0.01 | $0.27 |
-| Output ($/1M tok) | $0.45 | $1.10 |
-| **Breakeven** | **3.3B output tok/mo** | At 50% utilization ($3,635/mo GPU cost) |
+| Input ($/1M tok) | $0.07 | $0.27 |
+| Output ($/1M tok) | $3.63 | $1.10 |
+| **Breakeven** | **26.4B output tok/mo** | At 50% utilization ($29,083/mo GPU cost) |
 
-This means you need to generate at least 3.3 billion output tokens per month
+This means you need to generate at least 26.4 billion output tokens per month
 to justify self-hosting over the OpenRouter API. Below that volume, the API
 is cheaper.
 
