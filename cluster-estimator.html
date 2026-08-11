@@ -1067,6 +1067,10 @@ function refreshModelUI() {
   filterPresets();
   updateApiModelList();
   recalculate();
+  // IE-GAP-020: the share-link/localStorage config may name a preset from the
+  // FULL library, which only exists after loadModelLibrary() swaps it in — the
+  // parse-time decode could not restore it. Re-decode so late presets land too.
+  if (window.location.hash && window.location.hash !== '#') decodeHashToConfig();
 }
 
 function getGpuSpec() {
@@ -1779,6 +1783,9 @@ function updateArchFields() {
 
 function getConfig() {
   return {
+    // IE-GAP-020: the active model preset is part of the config — share
+    // links and saved configs can restore it ('' = no preset selected).
+    preset: document.getElementById('modelPreset').value,
     params: document.getElementById('params').value,
     arch: document.getElementById('arch').value,
     activeParams: document.getElementById('activeParams').value,
@@ -1912,6 +1919,18 @@ function setConfig(cfg) {
   document.getElementById('maxUsersLabel').textContent = parseInt(cfg.maxConcurrentUsers || 100).toLocaleString();
   document.getElementById('queueDepthLabel').textContent = parseFloat(cfg.queueDepthMultiplier || 1.5).toFixed(2);
   document.getElementById('bwUtilLimitLabel').textContent = parseFloat(cfg.bandwidthUtilizationLimit || 0.90).toFixed(2);
+  // IE-GAP-020: restore the model preset when the config carries one (share
+  // links, localStorage saves, imported JSON). The preset is the source of
+  // truth for the arch fields it owns — applyPreset() re-fills them plus the
+  // description and API-pricing highlight, then recalculates. Unknown/absent
+  // presets keep legacy behavior: fields restore as-is, no preset selected.
+  if (cfg.preset && MODEL_PRESETS[cfg.preset]) {
+    const presetSel = document.getElementById('modelPreset');
+    if (presetSel && presetSel.querySelector(`option[value="${cfg.preset}"]`)) {
+      presetSel.value = cfg.preset;
+      applyPreset();
+    }
+  }
   recalculate();
 }
 
