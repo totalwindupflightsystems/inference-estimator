@@ -17,23 +17,23 @@ Preset data structure (JS object):
 const MODEL_PRESETS = {
   'llama-3-70b': {
     name: 'Llama 3 70B',
-    params: 70, arch: 'dense', nLayers: 80, nKvHeads: 8, headDim: 128, hiddenSize: 8192,
+    params: 70.6, arch: 'dense', nLayers: 80, nKvHeads: 8, headDim: 128, hiddenSize: 8192,
     desc: 'Meta Llama 3 — 70B dense, 80 layers, GQA (8 KV heads), 128 head dim'
   },
   'llama-4-400b-moe': {
     name: 'Llama 4 400B (MoE)',
-    params: 400, arch: 'moe', activeParams: 40, nLayers: 126, nKvHeads: 8, headDim: 128, hiddenSize: 16384,
-    desc: 'Meta Llama 4 Behemoth — 400B total, ~40B active, 16 experts, 126 layers'
+    params: 400, arch: 'moe', activeParams: 17, nLayers: 48, nKvHeads: 8, headDim: 128, hiddenSize: 5120,
+    desc: 'Meta Llama 4 Maverick — 400B total MoE, 17B active, 48 layers'
   },
   'deepseek-v3': {
     name: 'DeepSeek V3',
-    params: 671, arch: 'moe', activeParams: 37, nLayers: 61, nKvHeads: 8, headDim: 128, hiddenSize: 7168,
+    params: 671, arch: 'moe', activeParams: 37, nLayers: 61, nKvHeads: 1, headDim: 576, hiddenSize: 7168,
     desc: 'DeepSeek V3 — 671B total MoE, 37B active, MLA attention, 61 layers'
   },
   'deepseek-v4': {
     name: 'DeepSeek V4',
-    params: 685, arch: 'moe', activeParams: 37, nLayers: 61, nKvHeads: 8, headDim: 128, hiddenSize: 7168,
-    desc: 'DeepSeek V4 — 685B total MoE, 37B active, enhanced MLA'
+    params: 1600, arch: 'moe', activeParams: 49, nLayers: 61, nKvHeads: 1, headDim: 512, hiddenSize: 7168,
+    desc: 'DeepSeek V4 Pro — 1600B total MoE, 49B active, enhanced MLA'
   },
   'mixtral-8x22b': {
     name: 'Mixtral 8×22B',
@@ -42,18 +42,18 @@ const MODEL_PRESETS = {
   },
   'qwen-2.5-72b': {
     name: 'Qwen 2.5 72B',
-    params: 72, arch: 'dense', nLayers: 80, nKvHeads: 8, headDim: 128, hiddenSize: 8192,
+    params: 72.7, arch: 'dense', nLayers: 80, nKvHeads: 8, headDim: 128, hiddenSize: 8192,
     desc: 'Alibaba Qwen 2.5 — 72B dense, 80 layers, GQA'
   },
   'minimax-m3-moe': {
     name: 'MiniMax-M3 (MoE)',
-    params: 456, arch: 'moe', activeParams: 45.9, nLayers: 72, nKvHeads: 8, headDim: 128, hiddenSize: 8192,
-    desc: 'MiniMax M3 — 456B total MoE, 45.9B active, 72 layers, hybrid attention'
+    params: 428, arch: 'moe', activeParams: 23, nLayers: 60, nKvHeads: 4, headDim: 128, hiddenSize: 6144,
+    desc: 'MiniMax M3 — 428B total MoE, 23B active, 60 layers, hybrid attention'
   },
   'gemma-3-27b': {
     name: 'Gemma 3 27B',
-    params: 27, arch: 'dense', nLayers: 46, nKvHeads: 8, headDim: 128, hiddenSize: 4608,
-    desc: 'Google Gemma 3 — 27B dense, 46 layers, GQA'
+    params: 27, arch: 'dense', nLayers: 62, nKvHeads: 16, headDim: 128, hiddenSize: 5376,
+    desc: 'Google Gemma 3 — 27B dense, 62 layers, GQA (16 KV heads)'
   },
   'mistral-large-2': {
     name: 'Mistral Large 2',
@@ -62,6 +62,8 @@ const MODEL_PRESETS = {
   },
 };
 ```
+
+**Note:** The preset values above are illustrative examples for quick sizing. `models/*.json` is the authoritative source for model architecture values (params, activeParams, nLayers, nKvHeads, headDim, hiddenSize) — always read from there when implementing or extending presets, as the spec block may drift from the source of truth.
 
 The preset dropdown sits at the top of the Model card. Selecting a preset calls `applyPreset()` which sets all model fields then calls `recalculate()`.
 
