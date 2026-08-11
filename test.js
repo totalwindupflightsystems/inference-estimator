@@ -19,6 +19,9 @@
  *   5. Math known-answers — IE-GAP-016 (DeepSeek V3 worked example from
  *      QUICKSTART.md: modelMemGB ≈ 23.9, KV cache ≈ 42.4, GPUs Needed = 8,
  *      decode throughput ≈ 1523 — catches formula breakage like a dropped ×2)
+ *   6. GAP hardening — IE-GAP-019..022 (share-link cold load with a poisoned
+ *      quant + preset restore, real importConfig() driven with a File object,
+ *      validation-banner UX on blank quant)
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -62,12 +65,14 @@ function makeFetchPolyfill() {
 }
 
 // --- jsdom load -----------------------------------------------------------
-async function loadPage() {
-  const dom = await JSDOM.fromFile(HTML_FILE, {
+// hash (optional): fragment to set in the document URL BEFORE page scripts
+// run, so the CE-018 hash-decode path is exercised as a true cold load.
+async function loadPage(hash) {
+  const opts = {
     runScripts: 'dangerously',
     resources: 'usable',
     pretendToBeVisual: true,
-    url: 'http://localhost/', // real origin so localStorage works (file:// = opaque)
+    url: 'http://localhost/' + (hash || ''), // real origin so localStorage works (file:// = opaque)
     beforeParse(window) {
       window.matchMedia = window.matchMedia || function () {
         return { matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} };
@@ -81,8 +86,13 @@ async function loadPage() {
       }
       window.fetch = makeFetchPolyfill();
     },
-  });
-  return dom;
+  };
+  if (hash) {
+    // String constructor so the hash is part of the initial document URL
+    // (JSDOM.fromFile would resolve the file path and may drop the fragment).
+    return new JSDOM(fs.readFileSync(HTML_FILE, 'utf8'), opts);
+  }
+  return JSDOM.fromFile(HTML_FILE, opts);
 }
 
 // Wait until MODEL_PRESETS has >= expected entries (read via eval since it's
@@ -437,6 +447,123 @@ function deepEqual(a, b) {
   }
 
   group('Math known-answers', mathAllPass, mathResults.join('; '));
+
+  // ===== TEST GROUP 6: GAP hardening (IE-GAP-019..022) =====
+  // Real-path coverage for the NaN-on-invalid-quant + preset-restore fixes:
+  // (a) share-link cold load with the hash set BEFORE page scripts run,
+  // (b) the real importConfig() driven with a File object, (c) the
+  // validation-banner UX. Every case must FAIL against the pre-fix code.
+  const hardenResults = [];
+  let hardenAllPass = true;
+  function hardenCheck(name, ok, detail) {
+    if (!ok) hardenAllPass = false;
+    hardenResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+  }
+
+  // (a) Share-link cold load: config carries a preset + a poisoned quant
+  // ("3.5" — no matching <option> in #quant, so pre-fix the select goes
+  // blank and the math renders NaN).
+  {
+    applyPresetByKey(win, doc, 'deepseek-v3');
+    const shareCfg = win.getConfig();
+    shareCfg.quant = '3.5'; // poisoned
+    const encoded = Buffer.from(JSON.stringify(shareCfg)).toString('base64');
+    const dom2 = await loadPage('#' + encoded);
+    const win2 = dom2.window;
+    const doc2 = win2.document;
+    const loaded2 = await waitForModels(win2, expectedCount, 15000);
+    hardenCheck('Share link hash survives load', win2.location.hash === '#' + encoded,
+      `hash=${String(win2.location.hash).slice(0, 18)}… loaded=${loaded2}`);
+    hardenCheck('Share link quant sanitized to default', doc2.getElementById('quant').value === '4.5',
+      `quant=${JSON.stringify(doc2.getElementById('quant').value)} (expect "4.5")`);
+    hardenCheck('Share link restores preset', doc2.getElementById('modelPreset').value === 'deepseek-v3',
+      `preset=${JSON.stringify(doc2.getElementById('modelPreset').value)}`);
+    const desc2 = doc2.getElementById('presetDesc');
+    hardenCheck('Share link preset description back',
+      !!(desc2 && desc2.style.display !== 'none' && desc2.innerHTML.trim().length > 0),
+      `desc visible=${!!(desc2 && desc2.style.display !== 'none')} len=${desc2 ? desc2.innerHTML.trim().length : 'n/a'}`);
+    hardenCheck('Share link params restored', doc2.getElementById('params').value === String(shareCfg.params),
+      `params=${JSON.stringify(doc2.getElementById('params').value)} (expect ${JSON.stringify(shareCfg.params)})`);
+    const nums2 = collectRenderedNumbers(doc2);
+    const bad2 = nums2.filter((n) => !Number.isFinite(n.value));
+    const literal2 = [...doc2.querySelectorAll('.metric .value')].filter((el) => /NaN|Infinity/.test(el.textContent));
+    hardenCheck('Share link results finite (no NaN)', bad2.length === 0 && literal2.length === 0,
+      `non-finite=${bad2.map((b) => b.label).join(',') || 'none'} literal=${literal2.map((el) => el.id).join(',') || 'none'}`);
+    // Let dom2's async library swap settle (its final step is a flashStatus)
+    // BEFORE tearing the window down — closing mid-load crashes the page's
+    // loadModelLibrary continuation on the torn-down document.
+    const tClose = Date.now();
+    while (Date.now() - tClose < 2000 && !/Loaded|Embedded/.test(doc2.getElementById('status').textContent)) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    dom2.window.close();
+  }
+
+  // (b) Real importConfig(): importConfig() creates its own <input type=file>
+  // and calls click(). jsdom has no file picker, so capture the input via a
+  // click() override and hand it a real File — the onchange → FileReader →
+  // setConfig chain that follows IS the real import path. The file claims a
+  // DIFFERENT preset than the current page state so the preset-restore check
+  // can only pass if the import actually applied the config.
+  {
+    applyPresetByKey(win, doc, manifest.models[0]);
+    const impCfg = win.getConfig();
+    impCfg.preset = 'deepseek-v3'; // different from the current state
+    impCfg.quant = '3.5'; // poisoned — no matching <option> in #quant
+    const file = new win.File([JSON.stringify(impCfg)], 'cluster-config.json', { type: 'application/json' });
+    let fileInput = null;
+    const origClick = win.HTMLInputElement.prototype.click;
+    win.HTMLInputElement.prototype.click = function () {
+      if (this.type === 'file') { fileInput = this; return; }
+      return origClick.apply(this, arguments);
+    };
+    win.importConfig();
+    win.HTMLInputElement.prototype.click = origClick;
+    hardenCheck('importConfig creates file input', !!fileInput, fileInput ? 'captured' : 'no input created');
+    if (fileInput) {
+      Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
+      fileInput.dispatchEvent(new win.Event('change', { bubbles: true }));
+      // FileReader.onload fires asynchronously (~10ms in jsdom) — yield so the
+      // real import chain runs to completion BEFORE asserting. Checking first
+      // would exit on the stale pre-import value and silently pass a dead path.
+      await new Promise((r) => setTimeout(r, 150));
+      hardenCheck('Import sanitizes poisoned quant', doc.getElementById('quant').value === '4.5',
+        `quant=${JSON.stringify(doc.getElementById('quant').value)} (expect "4.5")`);
+      const numsImp = collectRenderedNumbers(doc);
+      const badImp = numsImp.filter((n) => !Number.isFinite(n.value));
+      const literalImp = [...doc.querySelectorAll('.metric .value')].filter((el) => /NaN|Infinity/.test(el.textContent));
+      hardenCheck('Import results finite (no NaN)', badImp.length === 0 && literalImp.length === 0,
+        `non-finite=${badImp.map((b) => b.label).join(',') || 'none'} literal=${literalImp.map((el) => el.id).join(',') || 'none'}`);
+      const bannerImp = doc.getElementById('validationBanner');
+      hardenCheck('Import leaves banner hidden (valid state)', !!(bannerImp && bannerImp.style.display === 'none'),
+        `banner display=${bannerImp ? bannerImp.style.display : 'missing'}`);
+      hardenCheck('Import restores preset from file', doc.getElementById('modelPreset').value === 'deepseek-v3',
+        `preset=${JSON.stringify(doc.getElementById('modelPreset').value)} (expect "deepseek-v3")`);
+    }
+  }
+
+  // (c) IE-GAP-021: validation banner — blanking #quant must show a visible
+  // hint instead of NaN values, and hide again once the input is valid.
+  {
+    const banner = doc.getElementById('validationBanner');
+    setInput(win, doc, 'quant', '');
+    win.recalculate();
+    const visible = !!(banner && banner.style.display !== 'none');
+    const hint = banner ? banner.textContent : '';
+    hardenCheck('Banner visible on blank quant', visible && /Select a quantization/i.test(hint),
+      `visible=${visible} text=${JSON.stringify(hint)}`);
+    const numsBlank = collectRenderedNumbers(doc);
+    const badBlank = numsBlank.filter((n) => !Number.isFinite(n.value));
+    const literalBlank = [...doc.querySelectorAll('.metric .value')].filter((el) => /NaN|Infinity/.test(el.textContent));
+    hardenCheck('Blank quant stays finite (IE-GAP-019 guard)', badBlank.length === 0 && literalBlank.length === 0,
+      `non-finite=${badBlank.map((b) => b.label).join(',') || 'none'} literal=${literalBlank.map((el) => el.id).join(',') || 'none'}`);
+    setInput(win, doc, 'quant', '4.5');
+    win.recalculate();
+    hardenCheck('Banner hidden on valid input', !!(banner && banner.style.display === 'none'),
+      `banner display=${banner ? banner.style.display : 'missing'}`);
+  }
+
+  group('GAP hardening (019-022)', hardenAllPass, hardenResults.join('; '));
 
   // ===== Summary =====
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
