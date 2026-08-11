@@ -31,6 +31,7 @@
   .metric.ok .value { color: var(--accent2); }
   .metric.warn .value { color: var(--warn); }
   .metric.bad .value { color: var(--danger); }
+  .validation-banner { grid-column: 1 / -1; font-size: 0.85rem; color: var(--danger); background: rgba(248,81,73,0.08); border: 1px solid var(--danger); border-radius: 8px; padding: 10px 14px; margin-bottom: 4px; }
   .notes { font-size: 0.78rem; color: var(--text-dim); margin-top: 16px; padding: 12px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border); }
   .notes strong { color: var(--accent); }
   .btn-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -587,6 +588,8 @@
 <div class="card" style="margin-bottom:24px">
   <h2>Results</h2>
   <div class="results" id="resultsContainer">
+    <!-- IE-GAP-021: visible validation — shown by recalculate() when core inputs are blank/invalid -->
+    <div id="validationBanner" class="validation-banner" style="display:none" role="alert"></div>
     <div class="metric"><div class="value" id="rModelMem">—</div><div class="label">Model Memory (GB)</div></div>
     <div class="metric"><div class="value" id="rKvCache">—</div><div class="label">KV Cache (GB)</div></div>
     <div class="metric"><div class="value" id="rTotalPerGpu">—</div><div class="label">VRAM / GPU (GB)</div></div>
@@ -1512,6 +1515,24 @@ function recalculate() {
   let breakevenTokensPerMonth = null;
   if (apiOutputCost && apiOutputCost > 0) {
     breakevenTokensPerMonth = monthlyGpuCost / (apiOutputCost / 1_000_000);
+  }
+
+  // IE-GAP-021: visible validation — blank/invalid core inputs must warn
+  // instead of silently rendering unreliable (or, pre-IE-GAP-019, NaN) numbers.
+  const quantEl = document.getElementById('quant');
+  const validationBanner = document.getElementById('validationBanner');
+  if (validationBanner) {
+    const quantBlank = !quantEl.value;
+    const coreInvalid = quantBlank || !Number.isFinite(quantBpw) || !Number.isFinite(kvBpw) ||
+      !Number.isFinite(paramsB) || !Number.isFinite(activeB);
+    if (coreInvalid) {
+      validationBanner.style.display = '';
+      validationBanner.textContent = quantBlank
+        ? '⚠ Select a quantization.'
+        : '⚠ Invalid input — check quantization and model fields; results below may be unreliable.';
+    } else {
+      validationBanner.style.display = 'none';
+    }
   }
 
   // --- Update Results ---
