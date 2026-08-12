@@ -1,0 +1,11 @@
+{
+  "id": "ornith-1.0-9b",
+  "name": "Ornith 1.0 9B",
+  "params": 9.2,
+  "arch": "dense",
+  "nLayers": 32,
+  "nKvHeads": 4,
+  "headDim": 256,
+  "hiddenSize": 4096,
+  "desc": "Ornith 1.0 9B dense (Qwen3.5 base), 32 layers, 256K ctx"
+}

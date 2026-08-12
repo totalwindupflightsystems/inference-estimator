@@ -1,0 +1,18 @@
+{
+  "id": "qwen3-coder-30b-a3b",
+  "name": "Qwen3 Coder 30B-A3B",
+  "params": 30.5,
+  "arch": "moe",
+  "activeParams": 3.3,
+  "nLayers": 48,
+  "nKvHeads": 4,
+  "headDim": 128,
+  "hiddenSize": 2048,
+  "desc": "Qwen3 Coder 30B-A3B MoE, 128 experts (top-8), 48 layers, 256K ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.07,
+      "output": 0.28
+    }
+  }
+}

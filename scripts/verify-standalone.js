@@ -2,11 +2,18 @@
 /**
  * Verify dist/inference-estimator-standalone.html loads WITHOUT any fetch
  * polyfill — proving the embedded library works from file:// offline.
- * IE-GAP-007 acceptance: "works from file://" + 42 presets populate.
+ * IE-GAP-007 acceptance: "works from file://" + all presets populate (count from models/index.json).
  */
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
+
+// Expected model count = manifest length (kept in sync with models/index.json).
+const MANIFEST_EXPECTED = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', 'models', 'index.json'), 'utf8')
+).models.length;
+
 const { JSDOM } = require('jsdom');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -41,13 +48,13 @@ const HTML_FILE = path.join(ROOT, 'dist', 'inference-estimator-standalone.html')
   let n = 0;
   for (let i = 0; i < 50; i++) {
     try { n = win.eval('Object.keys(MODEL_PRESETS).length'); } catch (e) { n = 0; }
-    if (n >= 42) break;
+    if (n >= MANIFEST_EXPECTED) break;
     await new Promise((r) => setTimeout(r, 100));
   }
 
   console.log('MODEL_PRESETS entries:', n);
-  if (n !== 42) {
-    console.error('FAIL: expected 42 embedded models, got ' + n);
+  if (n !== MANIFEST_EXPECTED) {
+    console.error('FAIL: expected ' + MANIFEST_EXPECTED + ' embedded models, got ' + n);
     process.exit(1);
   }
 
@@ -63,7 +70,7 @@ const HTML_FILE = path.join(ROOT, 'dist', 'inference-estimator-standalone.html')
     process.exit(1);
   }
 
-  console.log('PASS: standalone loads 42 models with zero network, calculation renders.');
+  console.log('PASS: standalone loads ' + MANIFEST_EXPECTED + ' models with zero network, calculation renders.');
   process.exit(0);
 })().catch((e) => {
   console.error('FAIL: ' + e.message);

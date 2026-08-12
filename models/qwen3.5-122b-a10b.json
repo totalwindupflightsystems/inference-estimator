@@ -1,0 +1,18 @@
+{
+  "id": "qwen3.5-122b-a10b",
+  "name": "Qwen3.5 122B-A10B",
+  "params": 122.0,
+  "arch": "moe",
+  "activeParams": 10.0,
+  "nLayers": 48,
+  "nKvHeads": 2,
+  "headDim": 256,
+  "hiddenSize": 3072,
+  "desc": "Qwen3.5 122B-A10B MoE, 256 experts (top-8), 48 layers, 256K ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.29,
+      "output": 2.4
+    }
+  }
+}

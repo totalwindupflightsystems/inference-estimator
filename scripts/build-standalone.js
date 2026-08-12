@@ -7,7 +7,7 @@
  * reproducible:
  *
  *   1. Read cluster-estimator.html (source of truth)
- *   2. Read models/index.json (manifest → array of 42 model ids)
+ *   2. Read models/index.json (manifest → array of all model ids)
  *   3. Read each models/<id>.json and inline it into an EMBEDDED_MODEL_LIBRARY
  *      const, inserted right after the FALLBACK_MODEL_PRESETS block
  *   4. Replace the fetch-based loadModelLibrary() with the embedded-library
@@ -17,7 +17,7 @@
  * Usage:
  *   node scripts/build-standalone.js
  *
- * Exit 0 only when the output contains all 42 embedded models, zero fetch()
+ * Exit 0 only when the output contains all embedded models, zero fetch()
  * calls, and the standalone loader body.
  */
 

@@ -1,0 +1,11 @@
+{
+  "id": "bonsai-27b",
+  "name": "Bonsai 27B",
+  "params": 27.0,
+  "arch": "dense",
+  "nLayers": 64,
+  "nKvHeads": 4,
+  "headDim": 256,
+  "hiddenSize": 5120,
+  "desc": "Bonsai 27B dense (Qwen3.6-27B base), 64 layers, 256K ctx"
+}

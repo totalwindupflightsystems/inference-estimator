@@ -1,0 +1,18 @@
+{
+  "id": "kimi-k3",
+  "name": "Kimi K3",
+  "params": 2800.0,
+  "arch": "moe",
+  "activeParams": 104.0,
+  "nLayers": 93,
+  "nKvHeads": 1,
+  "headDim": 512,
+  "hiddenSize": 7168,
+  "desc": "Kimi K3 2.8T/104B active MoE, KDA Delta Attention (kv_lora 512), 93 layers, 1M ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 3.0,
+      "output": 15.0
+    }
+  }
+}

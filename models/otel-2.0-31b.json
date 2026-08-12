@@ -1,0 +1,11 @@
+{
+  "id": "otel-2.0-31b",
+  "name": "OTel 2.0 31B",
+  "params": 31.0,
+  "arch": "dense",
+  "nLayers": 60,
+  "nKvHeads": 16,
+  "headDim": 256,
+  "hiddenSize": 5376,
+  "desc": "OTel 2.0 LLM 31B dense (Gemma 4 base), 60 layers, 256K ctx"
+}

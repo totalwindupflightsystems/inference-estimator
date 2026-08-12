@@ -1,0 +1,11 @@
+{
+  "id": "dolphin-yi-1.5-34b",
+  "name": "Dolphin Yi 1.5 34B",
+  "params": 34.4,
+  "arch": "dense",
+  "nLayers": 60,
+  "nKvHeads": 8,
+  "headDim": 128,
+  "hiddenSize": 7168,
+  "desc": "Dolphin 2.9.1 Yi 1.5 34B dense, 60 layers"
+}

@@ -27,7 +27,7 @@ Quick, no-dependency estimation for LLM inference cluster provisioning. Run in a
 - Cluster-level aggregation (servers × GPUs per server)
 - tokens/$ estimate based on memory bandwidth and GPU pricing
 - System RAM & NVMe cache estimates
-- Model library presets (42 models: Llama, DeepSeek, Mixtral, Phi, Granite, …) with per-provider API pricing (OpenRouter/Together/Fireworks)
+- Model library presets (60 models: Llama, DeepSeek, Qwen, Gemma, Mistral, Phi, Granite, Ornith, …) with per-provider API pricing (OpenRouter/Together/Fireworks)
 - Serving engine overhead models: vLLM, SGLang, TGI (KV waste, prefill/batch efficiency)
 - Speculative decoding throughput estimates
 - Multi-node interconnect topology: NVLink/NVSwitch and InfiniBand (intra/inter-node bandwidth)
@@ -46,7 +46,7 @@ inference-estimator/
 ├── CONTRIBUTING.md
 ├── README.md
 ├── cluster-estimator.html    # The tool (HTML + CSS + JS, single file)
-├── models/                   # Per-model JSON library (42 models + index.json)
+├── models/                   # Per-model JSON library (60 models + index.json)
 ├── docs/                     # Formula reference, quick-start, input glossary
 ├── scripts/                  # build-standalone.js + verify-standalone.js
 ├── dist/                     # Build output — standalone build (gitignored)

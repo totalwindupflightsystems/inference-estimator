@@ -1,0 +1,11 @@
+{
+  "id": "tinyllama-1.1b",
+  "name": "TinyLlama 1.1B Chat",
+  "params": 1.1,
+  "arch": "dense",
+  "nLayers": 22,
+  "nKvHeads": 4,
+  "headDim": 64,
+  "hiddenSize": 2048,
+  "desc": "TinyLlama 1.1B Chat dense, 22 layers, 2K ctx"
+}

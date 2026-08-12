@@ -1,0 +1,17 @@
+{
+  "id": "qwen2.5-coder-32b",
+  "name": "Qwen2.5 Coder 32B",
+  "params": 32.8,
+  "arch": "dense",
+  "nLayers": 64,
+  "nKvHeads": 8,
+  "headDim": 128,
+  "hiddenSize": 5120,
+  "desc": "Qwen2.5 Coder 32B dense, 64 layers, 32K ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.66,
+      "output": 1.0
+    }
+  }
+}

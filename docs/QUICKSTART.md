@@ -11,7 +11,7 @@ verify).
 
 1. **Open** `cluster-estimator.html` in any browser (double-click or
    `file://` URL — no server needed). Note: from `file://` the tool runs on
-   its embedded fallback data — all 42 presets and API pricing are baked in,
+   its embedded fallback data — all 60 presets and API pricing are baked in,
    but live model updates are unavailable (a console warning explains this).
    Serve the directory over HTTP (`python3 -m http.server 8000`) for the full
    live-update experience.

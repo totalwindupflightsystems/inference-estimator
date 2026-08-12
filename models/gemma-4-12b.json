@@ -1,0 +1,11 @@
+{
+  "id": "gemma-4-12b",
+  "name": "Gemma 4 12B",
+  "params": 12.5,
+  "arch": "dense",
+  "nLayers": 48,
+  "nKvHeads": 8,
+  "headDim": 256,
+  "hiddenSize": 3840,
+  "desc": "Gemma 4 12B dense, 48 layers, 256K ctx"
+}

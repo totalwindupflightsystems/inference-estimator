@@ -1,0 +1,17 @@
+{
+  "id": "qwen2.5-coder-14b",
+  "name": "Qwen2.5 Coder 14B",
+  "params": 14.7,
+  "arch": "dense",
+  "nLayers": 48,
+  "nKvHeads": 8,
+  "headDim": 128,
+  "hiddenSize": 5120,
+  "desc": "Qwen2.5 Coder 14B dense, 48 layers, 32K ctx",
+  "pricing": {
+    "openrouter": {
+      "input": 0.1,
+      "output": 0.3
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "ornith-1.0-35b",
+  "name": "Ornith 1.0 35B",
+  "params": 35.0,
+  "arch": "moe",
+  "activeParams": 3.0,
+  "nLayers": 40,
+  "nKvHeads": 2,
+  "headDim": 256,
+  "hiddenSize": 2048,
+  "desc": "Ornith 1.0 35B-A3B MoE, 256 experts (top-8), 40 layers, 256K ctx"
+}

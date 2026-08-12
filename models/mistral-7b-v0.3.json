@@ -1,0 +1,11 @@
+{
+  "id": "mistral-7b-v0.3",
+  "name": "Mistral 7B v0.3",
+  "params": 7.25,
+  "arch": "dense",
+  "nLayers": 32,
+  "nKvHeads": 8,
+  "headDim": 128,
+  "hiddenSize": 4096,
+  "desc": "Mistral 7B v0.3 dense, 32 layers, GQA, 32K ctx"
+}

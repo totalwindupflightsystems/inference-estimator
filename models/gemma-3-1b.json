@@ -1,0 +1,11 @@
+{
+  "id": "gemma-3-1b",
+  "name": "Gemma 3 1B",
+  "params": 1.1,
+  "arch": "dense",
+  "nLayers": 26,
+  "nKvHeads": 1,
+  "headDim": 256,
+  "hiddenSize": 1152,
+  "desc": "Gemma 3 1B dense, 26 layers, GQA (1 KV head)"
+}

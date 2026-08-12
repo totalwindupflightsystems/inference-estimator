@@ -210,7 +210,7 @@ function deepEqual(a, b) {
   const doc = win.document;
 
   const manifest = JSON.parse(fs.readFileSync(path.join(MODELS_DIR, 'index.json'), 'utf8'));
-  const expectedCount = manifest.models.length; // 42
+  const expectedCount = manifest.models.length; // manifest-driven (was 42, now 60)
 
   const loadedCount = await waitForModels(win, expectedCount, 15000);
 
@@ -564,6 +564,22 @@ function deepEqual(a, b) {
   }
 
   group('GAP hardening (019-022)', hardenAllPass, hardenResults.join('; '));
+
+  // ===== TEST GROUP 7: Alphabetical preset ordering (2026-08-12 library refresh) =====
+  // filterPresets() must render the dropdown sorted by display name (case-insensitive).
+  {
+    win.filterPresets();
+    const sel = doc.getElementById('modelPreset');
+    const names = [...sel.querySelectorAll('option')]
+      .map((o) => o.textContent)
+      .filter((t) => t && t !== '-- Select preset --');
+    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    const sameOrder = names.every((n, i) => n === sorted[i]);
+    const missing = manifest.models.filter((id) => !win.eval('MODEL_PRESETS')[id]);
+    group('Alphabetical presets',
+      sameOrder && names.length === expectedCount && missing.length === 0,
+      `${names.length}/${expectedCount} options, sorted=${sameOrder}, missing=${missing.length}`);
+  }
 
   // ===== Summary =====
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);

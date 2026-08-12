@@ -1,0 +1,11 @@
+{
+  "id": "smollm2-135m",
+  "name": "SmolLM2 135M",
+  "params": 0.135,
+  "arch": "dense",
+  "nLayers": 30,
+  "nKvHeads": 3,
+  "headDim": 64,
+  "hiddenSize": 576,
+  "desc": "SmolLM2 135M Instruct dense, 30 layers"
+}
