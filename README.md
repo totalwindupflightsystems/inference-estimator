@@ -2,7 +2,7 @@
 
 Single-page static HTML tool for GPU cluster sizing estimation.
 
-**Quick, no-dependency estimation for LLM inference cluster provisioning.** Runs in any browser over an HTTP server or GitHub Pages -- no build step. (Opening `cluster-estimator.html` directly via `file://` loads embedded presets only -- see [Quick Start](QUICKSTART.md) or the standalone build below.)
+**Quick, no-dependency estimation for LLM inference cluster provisioning.** Runs in any browser over an HTTP server or GitHub Pages -- no build step. (Opening `cluster-estimator.html` directly via `file://` loads embedded presets only -- see [Quick Start](docs/QUICKSTART.md) or the standalone build below.)
 
 ## What It Does
 
@@ -25,11 +25,11 @@ To run the regression suite (presets, roundtrip, edge cases): `npm install && np
 
 Two distributions ship from this repo:
 
-- **`cluster-estimator.html`** (default) — fetches the 42 per-model JSONs from
+- **`cluster-estimator.html`** (default) — fetches the 60 per-model JSONs from
   `models/` at runtime. Requires an HTTP server (or the GitHub Pages deploy);
   `file://` uses the embedded fallback (all 60 presets + API pricing baked in,
   no live updates).
-- **`dist/inference-estimator-standalone.html`** — 166 KB self-contained build
+- **`dist/inference-estimator-standalone.html`** — ~182 KB self-contained build
   with all 60 model presets inlined. Zero network requests, works from
   `file://` (double-click to open offline). The better distribution for local
   / air-gapped use.
