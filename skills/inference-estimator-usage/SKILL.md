@@ -84,7 +84,7 @@ catch this).
 
 ## Automating tests against the real page
 
-Use headless Chrome + CDP (see `docs/dogfood/2026-08-11-integration.md`).
+Use headless Chrome + CDP (see `.coding-hermes/dogfood/2026-08-11-integration.md`).
 Test-driver traps: `/json/new` may reuse an existing tab (force a fresh
 document: navigate to `about:blank` first, or add a unique query param);
 `localStorage.clear()` must run on the target origin; the debounced hash

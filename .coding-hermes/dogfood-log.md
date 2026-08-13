@@ -28,8 +28,8 @@
   Friction count: 3 real frictions (NaN vector, preset-dropdown gap, no
   validation messaging) + several test-driver artifacts (tab reuse, wrong-
   origin localStorage.clear, debounce lag).
-- **Left behind:** docs/dogfood/2026-08-11-integration.md,
-  docs/dogfood/diagnostics.md, skills/inference-estimator-usage/SKILL.md,
+- **Left behind:** .coding-hermes/dogfood/2026-08-11-integration.md,
+  .coding-hermes/dogfood/diagnostics.md, skills/inference-estimator-usage/SKILL.md,
   board tasks IE-GAP-019..022 (+ events.jsonl provenance).
 - **Foreman:** cooldown 900s (not paused) — no wake needed; 4 pending tasks
   added for the next tick.

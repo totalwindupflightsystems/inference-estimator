@@ -21,6 +21,14 @@ Full pricing features (cloud GPU pricing, API cost comparison) need the runtime-
 
 To run the regression suite (presets, roundtrip, edge cases): `npm install && npm test` (Node 18+).
 
+## Integration
+
+Embed the tool in another page, share/restore state through the URL hash, or
+work with the JSON export format — see [docs/INTEGRATION.md](docs/INTEGRATION.md).
+It documents the hash state format (base64-encoded JSON in `location.hash`),
+the full 60-field JSON export schema, and iframe embedding (no postMessage API;
+use the standalone build for offline embeds).
+
 ## Distribution
 
 Two distributions ship from this repo:
