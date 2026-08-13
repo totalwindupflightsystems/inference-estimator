@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Single-page static HTML tool for GPU cluster sizing estimation.",
   "scripts": {
-    "test": "node test.js"
+    "test": "node test.js",
+    "verify:board": "node scripts/verify-board-evidence.js"
   },
   "repository": {
     "type": "git",
