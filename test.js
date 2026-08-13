@@ -701,7 +701,7 @@ function deepEqual(a, b) {
         distCheck(`source marker: ${name}`,
           inSrc && inDist,
           !inSrc
-            ? 'MISSING from cluster-estimator.html — source changed, rebuild dist'
+            ? 'MISSING from cluster-estimator.html — dist is STALE: source changed, rebuild dist (node scripts/build-standalone.js)'
             : inDist
               ? 'present in dist'
               : 'MISSING from dist — dist is STALE vs source (rebuild: node scripts/build-standalone.js)');
