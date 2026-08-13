@@ -27,6 +27,11 @@
  *      README/QUICKSTART, preset counts match models/index.json, standalone
  *      size claim within ±5% of the dist file, README links to the canonical
  *      docs/QUICKSTART.md)
+ *   9. Dist freshness — IE-GAP-027 (dist/inference-estimator-standalone.html
+ *      is gitignored build output; distinctive source markers and the
+ *      embedded preset count must match the current cluster-estimator.html +
+ *      models/index.json, else the group fails with a 'dist is stale'
+ *      message. Missing dist = SKIPPED warning, not a failure.)
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -658,6 +663,62 @@ function deepEqual(a, b) {
       qsLink ? 'docs/QUICKSTART.md' : 'no link to docs/QUICKSTART.md found');
 
     group('Docs consistency', docAllPass, docResults.join('; '));
+  }
+
+  // ===== TEST GROUP 9: Dist freshness (IE-GAP-027) =====
+  // dist/inference-estimator-standalone.html is gitignored build output
+  // (node scripts/build-standalone.js), so nothing in git forces a rebuild
+  // after source/model changes. This group compares distinctive source
+  // markers and the embedded preset count against the current
+  // cluster-estimator.html + models/index.json and fails with a clear
+  // 'dist is stale' message on drift. A missing dist file is a SKIPPED
+  // warning, not a failure — fresh clones legitimately have no dist/.
+  {
+    const distFreshResults = [];
+    let distFreshPass = true;
+    function distCheck(name, ok, detail) {
+      if (!ok) distFreshPass = false;
+      distFreshResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+    }
+
+    const distFile = path.join(ROOT, 'dist', 'inference-estimator-standalone.html');
+    const srcText = fs.readFileSync(HTML_FILE, 'utf8');
+    if (!fs.existsSync(distFile)) {
+      group('Dist freshness', true,
+        'SKIPPED — dist/inference-estimator-standalone.html missing (run node scripts/build-standalone.js)');
+    } else {
+      const distText = fs.readFileSync(distFile, 'utf8');
+      // Distinctive source markers that the build must carry through verbatim.
+      const markers = [
+        ['validationBanner element', '<div id="validationBanner" class="validation-banner" style="display:none" role="alert"></div>'],
+        ['URL hash encoder', 'function encodeConfigToHash()'],
+        ['URL hash decoder', 'function decodeHashToConfig()'],
+        ['model library loader', 'async function loadModelLibrary() {'],
+      ];
+      for (const [name, marker] of markers) {
+        const inSrc = srcText.includes(marker);
+        const inDist = distText.includes(marker);
+        distCheck(`source marker: ${name}`,
+          inSrc && inDist,
+          !inSrc
+            ? 'MISSING from cluster-estimator.html — source changed, rebuild dist'
+            : inDist
+              ? 'present in dist'
+              : 'MISSING from dist — dist is STALE vs source (rebuild: node scripts/build-standalone.js)');
+      }
+      // Embedded preset count: the standalone embeds one pretty-printed JSON
+      // object per model (same shape the build script counts); the source's
+      // fallback block and models/index.json must agree with it.
+      const embeddedRe = /^\s*"[a-z0-9.-]+": \{\n\s*"id"/gm;
+      const distEmbedded = (distText.match(embeddedRe) || []).length;
+      const srcFallback = (srcText.match(/^\s*'[a-z0-9.-]+': \{ name:/gm) || []).length;
+      const countOk = distEmbedded === expectedCount && srcFallback === expectedCount;
+      distCheck('embedded preset count',
+        countOk,
+        `dist=${distEmbedded}, source fallback=${srcFallback}, models/index.json=${expectedCount}` +
+          (countOk ? '' : ' — dist is STALE (rebuild: node scripts/build-standalone.js)'));
+      group('Dist freshness', distFreshPass, distFreshResults.join('; '));
+    }
   }
 
   // ===== Summary =====
