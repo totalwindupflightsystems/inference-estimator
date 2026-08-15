@@ -2,7 +2,7 @@
 
 Single-page static HTML tool for GPU cluster sizing estimation.
 
-**Quick, no-dependency estimation for LLM inference cluster provisioning.** Runs in any browser over an HTTP server or GitHub Pages -- no build step. (Opening `cluster-estimator.html` directly via `file://` loads embedded presets only -- see [Quick Start](docs/QUICKSTART.md) or the standalone build below.)
+**Quick, no-dependency estimation for LLM inference cluster provisioning.** Runs in any browser over an HTTP server or GitHub Pages -- no build step. (Opening `cluster-estimator.html` directly via `file://` also works: it falls back to the embedded library with all 60 model presets and API pricing included, just without live updates from `models/` -- see [Quick Start](docs/QUICKSTART.md) or the standalone build below.)
 
 ## What It Does
 
