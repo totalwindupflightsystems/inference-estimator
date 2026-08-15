@@ -10,7 +10,7 @@
  *
  * Loads the single-file tool via jsdom (with a fetch polyfill that serves
  * models/*.json from disk), waits for MODEL_PRESETS to populate (60 entries),
- * then exercises eight test groups:
+ * then exercises ten test groups:
  *   1. Presets  — all 60 model presets produce finite rendered numbers
  *   2. Roundtrip — getConfig → JSON → setConfig → getConfig is lossless
  *   3. Edge     — 0 GPUs, 1B params, FP32 quant, 1M context → finite outputs
@@ -32,6 +32,10 @@
  *      embedded preset count must match the current cluster-estimator.html +
  *      models/index.json, else the group fails with a 'dist is stale'
  *      message. Missing dist = SKIPPED warning, not a failure.)
+ *  10. Board evidence — IE-GAP-029 (scripts/verify-board-evidence.js must
+ *      pass on the REAL board: every status=complete row carries a
+ *      commit_hash that resolves in git; temp-copy negative fixtures with a
+ *      cleared hash and a bogus hash must fail naming the row)
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -45,7 +49,9 @@
 
 const assert = require('assert');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const { JSDOM } = require('jsdom');
 
@@ -719,6 +725,76 @@ function deepEqual(a, b) {
           (countOk ? '' : ' — dist is STALE (rebuild: node scripts/build-standalone.js)'));
       group('Dist freshness', distFreshPass, distFreshResults.join('; '));
     }
+  }
+
+  // ===== TEST GROUP 10: Board evidence (IE-GAP-029) =====
+  // scripts/verify-board-evidence.js is the foreman gate that makes the
+  // board's "guard clean" claim auditable: every status=complete row must
+  // carry a commit_hash that resolves to a real commit. Running it against
+  // the REAL board here makes the gate a regression test for board hygiene —
+  // if the board ever gains an unevidenced completion, npm test fails.
+  // Negative fixtures (a temp copy with one hash cleared, and one with a
+  // bogus hash) prove the gate actually rejects unevidenced rows.
+  {
+    const evResults = [];
+    let evPass = true;
+    function evCheck(name, ok, detail) {
+      if (!ok) evPass = false;
+      evResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+    }
+
+    const gateScript = path.join(ROOT, 'scripts', 'verify-board-evidence.js');
+    const realBoard = path.resolve(__dirname, '.coding-hermes', 'board', 'tasks.jsonl');
+    const runGate = (file) => spawnSync(
+      process.execPath, [gateScript, `--file=${file}`],
+      { cwd: ROOT, encoding: 'utf8' }
+    );
+
+    // (a) Positive: the real board must satisfy the gate.
+    const pos = runGate(realBoard);
+    const posOut = (pos.stdout || '') + (pos.stderr || '');
+    const okLine = /board evidence OK: \d+ complete rows, \d+ with commit_hash, 0 missing/.exec(posOut);
+    evCheck('real board passes gate', pos.status === 0 && !!okLine,
+      pos.status === 0
+        ? (okLine ? okLine[0] : `OK line missing: ${posOut.trim()}`)
+        : `exit ${pos.status}: ${posOut.trim()}`);
+
+    // (b/c) Negative: a temp copy with a cleared hash and one with a bogus
+    // hash must both fail (exit 1) and name the offending row id.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-evidence-'));
+    try {
+      const boardText = fs.readFileSync(realBoard, 'utf8');
+      const mkFixture = (patchHash) => {
+        const rows = boardText.split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+        const row = rows.find((r) => r.status === 'complete');
+        if (!row) throw new Error('no complete row in board fixture');
+        const idx = rows.indexOf(row);
+        row.commit_hash = patchHash;
+        const fp = path.join(tmpDir, `fixture-${idx}.jsonl`);
+        fs.writeFileSync(fp, rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+        return { fp, id: row.id };
+      };
+
+      const cleared = mkFixture(null);
+      const neg1 = runGate(cleared.fp);
+      const out1 = (neg1.stdout || '') + (neg1.stderr || '');
+      evCheck('cleared hash rejected', neg1.status === 1 && out1.includes(cleared.id),
+        neg1.status === 1
+          ? (out1.includes(cleared.id) ? `exit 1, names ${cleared.id}` : `exit 1 but does not name ${cleared.id}: ${out1.trim()}`)
+          : `exit ${neg1.status}: ${out1.trim()}`);
+
+      const bogus = mkFixture('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef');
+      const neg2 = runGate(bogus.fp);
+      const out2 = (neg2.stdout || '') + (neg2.stderr || '');
+      evCheck('bogus hash rejected', neg2.status === 1 && out2.includes(bogus.id),
+        neg2.status === 1
+          ? (out2.includes(bogus.id) ? `exit 1, names ${bogus.id}` : `exit 1 but does not name ${bogus.id}: ${out2.trim()}`)
+          : `exit ${neg2.status}: ${out2.trim()}`);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+
+    group('Board evidence', evPass, evResults.join('; '));
   }
 
   // ===== Summary =====
