@@ -13,7 +13,7 @@ category: software-development
 
 GPU cluster sizing estimator: model params + quantization + context → VRAM,
 KV cache, GPUs needed, sweet spot. Single-file static HTML, zero deps, no
-build step. 42 model presets (MoE + dense), GPU specs (H100/H200/B200/A100/
+build step. 60 model presets (MoE + dense), GPU specs (H100/H200/B200/A100/
 L40S/MI300X/RTX6000/custom), serving engines (vLLM/SGLang/TGI), TP/PP, MoE
 expert placement, NVLink/InfiniBand topology, speculative decoding,
 concurrency modeling, cloud + API pricing, breakeven analysis.
@@ -24,7 +24,7 @@ concurrency modeling, cloud + API pricing, breakeven analysis.
 |---|---|
 | Main tool (live model library) | `cluster-estimator.html` — serve over HTTP |
 | Offline single-file build | `dist/inference-estimator-standalone.html` — double-click from `file://`, identical numbers |
-| Model data | `models/*.json` (42 files + `index.json`), fetched at runtime; embedded fallback baked into the HTML |
+| Model data | `models/*.json` (60 files + `index.json`), fetched at runtime; embedded fallback baked into the HTML |
 | Regression harness | `test.js` (jsdom) — `npm install && npm test`, 5 groups ~1.3s |
 | Worked-example replication | `docs/example-calc.js` — `node docs/example-calc.js` |
 | Docs | `docs/QUICKSTART.md` (5-step + full worked example), `docs/FORMULAS.md`, `docs/GLOSSARY.md` |
