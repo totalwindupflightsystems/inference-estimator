@@ -5,7 +5,7 @@ Thanks for your interest in contributing to the Inference Cluster Estimator!
 ## Project Structure
 
 - `cluster-estimator.html` — Single-file application (HTML + CSS + JS)
-- `models/` — Per-model JSON library (42 models + index.json)
+- `models/` — Per-model JSON library (60 models + index.json)
 - `docs/` — Formula reference, quick-start, input glossary
 - `test.js` — Node regression harness (presets/roundtrip/edge cases)
 - `specs/` — Implementation specifications
@@ -21,7 +21,7 @@ Thanks for your interest in contributing to the Inference Cluster Estimator!
 
 ## Testing
 
-The repo includes a Node regression harness (`test.js`) covering 42 preset applications, JSON export/import roundtrip, and edge cases.
+The repo includes a Node regression harness (`test.js`) covering 60 preset applications, JSON export/import roundtrip, and edge cases.
 
 ```bash
 npm install   # one-time (devDependencies)
