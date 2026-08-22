@@ -4,8 +4,10 @@ description: >-
   How to use the Inference Cluster Estimator (single-file HTML GPU cluster
   sizing tool) for real: entry points, run commands, the worked example,
   persistence/share workflows, and the pitfalls that produce silent NaN
-  results. Load this skill before field-testing or extending the project.
-version: 1.0.0
+  results (fixed 08-19), inert interconnect/disaggregated/TGI modeling
+  (IE-GAP-031..033), and display quirks (IE-GAP-034..036). Load this skill
+  before field-testing or extending the project.
+version: 1.1.0
 category: software-development
 ---
 
@@ -25,7 +27,7 @@ concurrency modeling, cloud + API pricing, breakeven analysis.
 | Main tool (live model library) | `cluster-estimator.html` — serve over HTTP |
 | Offline single-file build | `dist/inference-estimator-standalone.html` — double-click from `file://`, identical numbers |
 | Model data | `models/*.json` (60 files + `index.json`), fetched at runtime; embedded fallback baked into the HTML |
-| Regression harness | `test.js` (jsdom) — `npm install && npm test`, 5 groups ~1.3s |
+| Regression harness | `test.js` (jsdom) — `npm install && npm test`, 10 groups ~3.1s |
 | Worked-example replication | `docs/example-calc.js` — `node docs/example-calc.js` |
 | Docs | `docs/QUICKSTART.md` (5-step + full worked example), `docs/FORMULAS.md`, `docs/GLOSSARY.md` |
 | Task board | `.coding-hermes/board/tasks.jsonl` (JSONL v2 rows; `events.jsonl` for provenance) |
@@ -49,7 +51,7 @@ Breakeven 26.4B tok/mo · "Tight fit — no headroom"**. If any of these drift,
 the math or the preset data broke (see diagnostics.md — known-answer tests
 catch this).
 
-## Real-use workflows (all verified 2026-08-11 in a real browser)
+## Real-use workflows (verified 2026-08-11 and re-verified 2026-08-22 in a real browser)
 
 1. **Sizing**: pick preset → set quant/ctx/batch → pick GPU + TP/PP →
    read Results (updates instantly). Presets fill model fields but NOT
@@ -65,18 +67,32 @@ catch this).
 
 ## Pitfalls (learned the hard way)
 
-- **Blank/invalid quantization = silent NaN.** `recalculate()` has no
-  fallback on the `#quant` select. Importing a config with a quant value
-  that isn't in the option list (e.g. `"3.5"`), or opening a share link with
-  `quant:""`, blanks the select and the Results panel fills with NaN —
-  no error message anywhere. Workaround: re-pick a valid quantization.
-  Fix tracked as IE-GAP-019 (board).
-- **Preset dropdown is empty after restore** (share link / import): fields
-  restore, but `#modelPreset` shows "-- Select preset --" — numbers are
-  correct; the dropdown state isn't part of the config (IE-GAP-020).
-- **Selecting a preset does not touch quantization** — the select keeps its
-  previous value (default 4.5 on fresh load). This is by design; don't
-  "fix" it by clearing the select — that triggers the NaN pitfall above.
+- **Out-of-list quantization values are silently clamped to Q4_K_M (4.5).**
+  Importing a config with `quant:"3.5"` (not an option value) or a share link
+  with `quant:""` no longer produces NaN (IE-GAP-019 fixed: `parseFloat(...) ||
+  4.5`), but the clamp is silent — no banner, no status note (IE-GAP-036 open).
+  If your results don't match the exported JSON, check the quant select.
+- **Blank quant shows a banner; out-of-list numeric quant does not.** The
+  validation banner ("⚠ Select a quantization.") covers only the blank case.
+- **Disaggregated mode keeps the KV cache UNSHARDED per GPU** (FORMULAS §4.1)
+  — per-GPU VRAM can exceed the GPU and the util cell turns red, but "GPUs
+  Needed" (TP×PP floor) and Sweet Spot may still say "Tight fit". Trust the
+  red util cell; raise TP or pick a bigger GPU (IE-GAP-032 open).
+- **The interconnect topology selector (NVLink/NVSwitch/InfiniBand/PCIe)
+  currently changes nothing but the "NVLink BW Utilization" readout** — the
+  cross-node penalty never fires in auto mode and isn't wired into results
+  even when forced (IE-GAP-031 open). Don't trust it for node-topology
+  decisions yet.
+- **TGI engine numbers are ~19× pessimistic at low batch** (80 tok/s vs
+  vLLM 1,523 at batch 8 on 8×H100): `min(batch/maxBatch, tokenBudget) × 0.75`
+  treats steady-state occupancy as batch/maxBatch. Compare engines with
+  vLLM/SGLang/raw; treat TGI as worst-case (IE-GAP-033 open).
+- **"KV Waste %" shows the size multiplier** (115.0% = 15% waste), and
+  **"MoE-Adjusted GPUs" applies EP overhead even with EP disabled** (shows 10
+  next to GPUs Needed 8 at defaults) — IE-GAP-034/035 open.
+- **Preset selection does not touch quantization** — the select keeps its
+  previous value (default 4.5 on fresh load). By design; don't "fix" it by
+  clearing the select.
 - **`dist/` is gitignored** — after changing the HTML or models, regenerate
   the standalone: `node scripts/build-standalone.js && node scripts/verify-standalone.js`.
 - **file:// on the non-standalone HTML** uses embedded fallback presets only

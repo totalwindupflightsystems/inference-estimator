@@ -33,3 +33,41 @@
   board tasks IE-GAP-019..022 (+ events.jsonl provenance).
 - **Foreman:** cooldown 900s (not paused) — no wake needed; 4 pending tasks
   added for the next tick.
+
+## 2026-08-22 — SHIPPABLE with caveats (real-browser field test #2)
+
+- **Promise:** "Model params + quantization + context → VRAM, KV cache, GPUs
+  needed, sweet spot" — single-file HTML cluster sizing tool; 60 model presets,
+  engines, TP/PP/EP, interconnect topology, disaggregated serving, pricing,
+  export/import/save/share/compare, offline standalone build.
+- **Method:** headless Chrome 149 via CDP, 35+ scenarios across 7 scripts.
+  Re-ran the QUICKSTART worked example on both distributions; re-tested the
+  2026-08-11 gap fixes (IE-GAP-019..022) via real file import + share-link cold
+  load; hand-checked new-preset math (GPT-OSS-120B); deep-probed the surface
+  the last run never touched (disaggregated, multi-node interconnect, engine
+  comparison, EP, spec toggle, providers).
+- **Verdict:** SHIPPABLE with caveats. Worked example byte-exact on HTTP AND
+  file:// standalone (23.9/42.37/59.6/8/74.4%/1523/80865/$19.92/26.4B); all
+  four 08-11 gaps verified FIXED; 60/60 presets load; zero console errors
+  anywhere; npm test 10/10 in 3.1s.
+- **Top 3 findings (new surface, all filed):**
+  1. P1 — interconnect topology (CE-010) is inert: auto cross-node detection
+     never fires (tpFitsNode formula wrong) and even forced, the ×1.19 penalty
+     changes no computed result. → IE-GAP-031
+  2. P1 — disaggregated mode reports infeasible configs (96.6 GB/GPU = 120.8%
+     util on 80 GB H100) as "Tight fit", GPUs Needed = 8 (TP floor). → IE-GAP-032
+  3. P1 — TGI engine model is 19× pessimistic (80 tok/s vs vLLM 1523 at batch
+     8; $68.75/1M vs $3.63) — engine comparison materially misleading. → IE-GAP-033
+  Plus P2: "KV Waste %" shows size multiplier 115.0% (IE-GAP-034), "MoE-Adjusted
+  GPUs = 10" with EP disabled (IE-GAP-035), silent quant clamp on import
+  (IE-GAP-036).
+- **Time-to-first-success:** ~2 min (load → preset → quant → results).
+  Friction count: 3 real model/UX gaps + 3 display issues (see tasks).
+- **Left behind:** .coding-hermes/dogfood/2026-08-22-integration.md,
+  .coding-hermes/dogfood/2026-08-22-diagnostics.md, SKILL.md updated to v1.1.0
+  (stale NaN pitfalls corrected, new pitfalls documented), board tasks
+  IE-GAP-031..036 + dogfood event 269.
+- **Foreman:** NOT woken — cooldown 21600s is a documented fleet.toml pin
+  (audits #254-258: "NO PUT"); registration healthy (namespace_id
+  coding-hermes, enabled, no zombies). 6 pending tasks wait for the next
+  scheduled tick (~6h cadence).
