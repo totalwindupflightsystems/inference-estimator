@@ -36,6 +36,10 @@
  *      pass on the REAL board: every status=complete row carries a
  *      commit_hash that resolves in git; temp-copy negative fixtures with a
  *      cleared hash and a bogus hash must fail naming the row)
+ *  11. CE-010 topology wiring — IE-GAP-031 (tpFitsNode compares TP ≤
+ *      gpusPerServer so a 2-node TP group fires the cross-node penalty in
+ *      auto mode; penalty is wired into decode/effective throughput so
+ *      NVLink-900 vs PCIe-5 change headline metrics under cross-node)
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -795,6 +799,101 @@ function deepEqual(a, b) {
     }
 
     group('Board evidence', evPass, evResults.join('; '));
+  }
+
+  // ===== TEST GROUP 11: CE-010 topology wiring (IE-GAP-031) =====
+  // Known-answer regression for the multi-node interconnect feature being
+  // INERT: tpFitsNode must compare TP ≤ gpusPerServer (not
+  // ⌈gpusNeeded/TP⌉ ≤ gpusPerServer), so a TP group spanning 2 nodes
+  // (TP=16 > gpusPerServer=8) fires the cross-node penalty in AUTO mode, and
+  // the penalty must change a REAL headline metric under policy=cross-node
+  // (NVLink-900 ratio 18:1 vs PCIe-5 ratio 128:25 = 5.12:1 → different
+  // decode/effective throughput). Both assertions FAIL against pre-fix code.
+  {
+    const topoResults = [];
+    let topoAllPass = true;
+    function topoCheck(name, ok, detail) {
+      if (!ok) topoAllPass = false;
+      topoResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+    }
+    const topoNum = (id) => parseFloat(doc.getElementById(id).textContent);
+    const topoText = (id) => doc.getElementById(id).textContent.trim();
+    const setTopo = (key) => {
+      setInput(win, doc, 'nvlinkTopo', key);
+      if (typeof win.updateNvlinkTopo === 'function') win.updateNvlinkTopo(); // sets sliders + recalculate
+      win.recalculate();
+    };
+
+    // (a) Auto: TP=16 over 2×8×H100 spans nodes → penalty must fire (was:
+    //     'None (intra-node)' because ceil(16/16)=1 ≤ 8 looked like "fits").
+    applyPresetByKey(win, doc, 'deepseek-v3');
+    setInput(win, doc, 'context', '32768');
+    setInput(win, doc, 'batchSize', '8');
+    setInput(win, doc, 'overhead', '15');
+    setInput(win, doc, 'quant', '4.5');
+    setInput(win, doc, 'kvPrecision', '16');
+    setInput(win, doc, 'tpSize', '16');
+    setInput(win, doc, 'ppSize', '1');
+    setInput(win, doc, 'gpuModel', 'H100-80');
+    setInput(win, doc, 'servingEngine', 'vllm');
+    setInput(win, doc, 'gpuPerServer', '8');
+    setInput(win, doc, 'numServers', '2');
+    setInput(win, doc, 'tpCrossNode', 'auto');
+    setInput(win, doc, 'ppCrossNode', 'auto');
+    setTopo('nvlink-900');
+    {
+      const penText = topoText('rCrossNodePenalty');
+      const penVal = parseFloat(penText.replace('×', ''));
+      topoCheck('Auto penalty fires when TP spans 2 nodes',
+        penText !== 'None (intra-node)' && Number.isFinite(penVal) && penVal > 1.00,
+        `TP=16 gpusPerServer=8 auto → ${penText}`);
+      topoCheck('Auto penalty = formula value (1+log10(18)×0.15 = 1.19)',
+        Number.isFinite(penVal) && Math.abs(penVal - (1 + Math.log10(18) * 0.15)) < 0.01,
+        `penalty=${Number.isFinite(penVal) ? penVal.toFixed(3) : 'NaN'} expected≈1.188`);
+    }
+
+    // (b) Regression guard: same TP=16 but 16 GPUs per server (single-node
+    //     group) must stay 'None (intra-node)' — default behavior intact.
+    setInput(win, doc, 'gpuPerServer', '16');
+    win.recalculate();
+    {
+      const singleText = topoText('rCrossNodePenalty');
+      topoCheck('Single-node config stays intra-node',
+        singleText === 'None (intra-node)',
+        `TP=16 gpusPerServer=16 auto → ${singleText}`);
+    }
+    setInput(win, doc, 'gpuPerServer', '8');
+    win.recalculate();
+
+    // (c) Forced cross-node: NVLink-900 (18:1) vs PCIe-5 (5.12:1) must yield
+    //     different penalties AND different headline throughput.
+    setInput(win, doc, 'tpCrossNode', 'cross-node');
+    setTopo('nvlink-900');
+    const nvDecode = topoNum('rDecodeThroughput');
+    const nvEff = topoNum('rEffectiveThroughput');
+    const nvPenalty = parseFloat(topoText('rCrossNodePenalty').replace('×', ''));
+    setTopo('pcie-5');
+    const pcDecode = topoNum('rDecodeThroughput');
+    const pcEff = topoNum('rEffectiveThroughput');
+    const pcPenalty = parseFloat(topoText('rCrossNodePenalty').replace('×', ''));
+    topoCheck('Cross-node penalty differs NVLink-900 vs PCIe-5',
+      Number.isFinite(nvPenalty) && Number.isFinite(pcPenalty) && nvPenalty > pcPenalty && nvPenalty > 1.00 && pcPenalty > 1.00,
+      `NVLink ×${nvPenalty.toFixed(3)} (18:1) vs PCIe-5 ×${pcPenalty.toFixed(3)} (5.12:1)`);
+    topoCheck('Decode throughput differs NVLink-900 vs PCIe-5',
+      Number.isFinite(nvDecode) && Number.isFinite(pcDecode) && nvDecode < pcDecode,
+      `rDecodeThroughput ${nvDecode} → ${pcDecode} tok/s (NVLink → PCIe-5)`);
+    topoCheck('Effective throughput differs NVLink-900 vs PCIe-5',
+      Number.isFinite(nvEff) && Number.isFinite(pcEff) && nvEff < pcEff,
+      `rEffectiveThroughput ${nvEff} → ${pcEff} tok/s`);
+    topoCheck('Throughput delta matches penalty ratio',
+      Number.isFinite(nvDecode) && Number.isFinite(pcDecode) && nvDecode > 0 &&
+        Math.abs(pcDecode / nvDecode - nvPenalty / pcPenalty) < 0.15,
+      `decode ratio ${(pcDecode / nvDecode).toFixed(3)} vs penalty ratio ${(nvPenalty / pcPenalty).toFixed(3)}`);
+    // Restore auto policy so later state is the default.
+    setInput(win, doc, 'tpCrossNode', 'auto');
+    win.recalculate();
+
+    group('CE-010 topology wiring (IE-GAP-031)', topoAllPass, topoResults.join('; '));
   }
 
   // ===== Summary =====

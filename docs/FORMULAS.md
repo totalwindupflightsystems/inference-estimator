@@ -835,9 +835,11 @@ bwRatio = (intraNodeBw > 0 && interNodeBw > 0) ? intraNodeBw / interNodeBw : 1
 
 ### 19.2 Cross-Node Penalty
 
-**Source code (line ~1370–1382):**
+**Source code (line ~1416–1436, main pane):**
 
 ```javascript
+const tpFitsNode = tp <= gpusPerServer; // IE-GAP-031: TP fits one node iff TP ≤ per-node GPUs
+const ppFitsNode = pp > 1 ? pp <= gpusPerServer : true;
 const tpIsCrossNode = tpCrossNode === 'cross-node'
     || (tpCrossNode === 'auto' && !tpFitsNode && tp > gpusPerServer);
 const ppIsCrossNode = ppCrossNode === 'cross-node'
@@ -847,13 +849,18 @@ if (tpIsCrossNode || ppIsCrossNode) {
     nvlinkGpuPenalty = crossPenalty;
 }
 const nvlinkAdjustedGpus = Math.ceil(gpusNeeded * nvlinkGpuPenalty);
+// IE-GAP-031: penalty is wired into a real headline metric — effective decode
+// throughput is divided by the penalty whenever TP/PP span nodes:
+if (tpIsCrossNode || ppIsCrossNode) {
+    effectiveDecodeThroughput /= nvlinkGpuPenalty;
+}
 ```
 
 **Formula:**
 
 ```
-tpFitsNode  = ⌈ gpusNeeded / TP ⌉ ≤ gpusPerServer
-ppFitsNode  = gpusNeeded / PP ≤ gpusPerServer
+tpFitsNode  = TP ≤ gpusPerServer
+ppFitsNode  = PP ≤ gpusPerServer        (PP > 1)
 tpCrossNode = (policy == 'cross-node') OR (policy == 'auto' AND !tpFitsNode AND TP > gpusPerServer)
 ppCrossNode = (policy == 'cross-node') OR (policy == 'auto' AND !ppFitsNode AND PP > 1)
 
@@ -863,7 +870,21 @@ else:
     nvlinkGpuPenalty = 1.0
 
 nvlinkAdjustedGpus = ⌈ gpusNeeded × nvlinkGpuPenalty ⌉
+
+if (tpCrossNode OR ppCrossNode):
+    effectiveDecodeThroughput = effectiveDecodeThroughput / nvlinkGpuPenalty
 ```
+
+**IE-GAP-031 correction (2026-08-22):** `tpFitsNode` previously compared
+`⌈ gpusNeeded / TP ⌉ ≤ gpusPerServer` — the VRAM-derived GPU *total*, which is
+the wrong quantity. With TP=16, gpusPerServer=8 and gpusNeeded=16 (TP×PP floor)
+the old check gave `1 ≤ 8` = "fits" even though the TP group physically spans
+2 nodes, so auto mode never fired the penalty and topology changes had zero
+effect on computed sizing. The check is now TP ≤ gpusPerServer. The penalty is
+additionally wired into effective decode throughput (÷ penalty when
+cross-node), so NVLink/NVSwitch/InfiniBand/PCIe choices now change real
+headline outputs (Decode Throughput, Effective Throughput, req/s, $/1M output)
+under cross-node policies, not just the "NVLink BW Utilization" readout.
 
 ### 19.3 NVLink Bandwidth Utilization
 

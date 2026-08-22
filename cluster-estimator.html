@@ -1416,9 +1416,11 @@ function recalculate() {
   const bwRatio = nvlinkInterNodeBw > 0 ? nvlinkIntraNodeBw / nvlinkInterNodeBw : 1;
   let nvlinkGpuPenalty = 1.0;
   let crossNodePenaltyNote = 'All intra-node — optimal';
-  const gpusNeededPerTp = tp > 0 ? Math.ceil(gpusNeeded / tp) : gpusNeeded;
-  const tpFitsNode = gpusNeededPerTp <= gpusPerServer;
-  const ppFitsNode = pp > 1 ? (gpusNeeded / pp <= gpusPerServer) : true;
+  // IE-GAP-031: a TP/PP group spans nodes when its SIZE exceeds the per-node
+  // GPU count — NOT when the VRAM-derived GPU total happens to fit one node.
+  // (TP=16 with gpusPerServer=8 spans 2 nodes even if gpusNeeded is also 16.)
+  const tpFitsNode = tp <= gpusPerServer;
+  const ppFitsNode = pp > 1 ? pp <= gpusPerServer : true;
   // Determine if TP crosses node boundaries
   const tpIsCrossNode = tpCrossNode === 'cross-node' || (tpCrossNode === 'auto' && !tpFitsNode && tp > gpusPerServer);
   const ppIsCrossNode = ppCrossNode === 'cross-node' || (ppCrossNode === 'auto' && !ppFitsNode && pp > 1);
@@ -1483,6 +1485,13 @@ function recalculate() {
   // CE-009: TGI continuous batching throughput multiplier applied on top
   if (servingEngine === 'tgi') {
     effectiveDecodeThroughput *= tgiBatchingMultiplier;
+  }
+  // IE-GAP-031: cross-node communication penalty reduces effective decode
+  // throughput — inter-node bandwidth is slower than intra-node, so the
+  // all-reduce/dispatch path stalls and achievable per-GPU tok/s drop.
+  // Penalty is 1.0 (no-op) whenever TP/PP stay inside a node.
+  if (tpIsCrossNode || ppIsCrossNode) {
+    effectiveDecodeThroughput /= nvlinkGpuPenalty;
   }
   // CE-008: SGLang RadixAttention cache-aware scheduling
   // Hit: throughput = base * 1.5 (50% reuse boost). Miss: throughput = base * (1 - overhead).
@@ -1795,7 +1804,7 @@ function recalculate() {
     notes.push(`<strong>CE-009 TGI vs vLLM:</strong> Same HW — TGI ${tgiThroughput.toFixed(0)} tok/s vs vLLM ${vllmThroughputForCompare.toFixed(0)} tok/s (${winner} +${advantage}%). TGI KV waste ${(engineCfg.kvWaste*100).toFixed(0)}% vs vLLM ${(vllmCfg.kvWaste*100).toFixed(0)}%, batch eff ${(engineCfg.batchEff*100).toFixed(0)}% vs ${(vllmCfg.batchEff*100).toFixed(0)}%.`);
   }
   // CE-010: NVLink topology note
-  notes.push(`<strong>CE-010 Topology:</strong> ${nvlinkTopoCfg.name} — intra-node ${nvlinkIntraNodeBw} GB/s, cross-node ${nvlinkInterNodeBw} GB/s (ratio ${bwRatio.toFixed(0)}:1). ${crossNodePenaltyNote}. GPU penalty: ×${nvlinkGpuPenalty.toFixed(2)}, NVLink-adjusted GPUs: ${nvlinkAdjustedGpus} (base: ${gpusNeeded}).`);
+  notes.push(`<strong>CE-010 Topology:</strong> ${nvlinkTopoCfg.name} — intra-node ${nvlinkIntraNodeBw} GB/s, cross-node ${nvlinkInterNodeBw} GB/s (ratio ${bwRatio.toFixed(0)}:1). ${crossNodePenaltyNote}. GPU penalty: ×${nvlinkGpuPenalty.toFixed(2)}, NVLink-adjusted GPUs: ${nvlinkAdjustedGpus} (base: ${gpusNeeded}).${(tpIsCrossNode || ppIsCrossNode) ? ` Decode throughput reduced by ×${nvlinkGpuPenalty.toFixed(2)}.` : ''}`);
   // CE-011: Multi-node scaling efficiency note
   if (numServers > 1) {
     notes.push(`<strong>CE-011 Multi-Node Scaling:</strong> ${numServers} nodes — scaling efficiency ${(scalingEfficiency*100).toFixed(1)}% (${scalingModel} model). All-reduce penalty ${(allReducePenalty*100).toFixed(1)}%, pipeline bubble ${(pipelineBubblePenalty*100).toFixed(1)}%. Eff. throughput: ${(effectiveDecodeThroughput*scalingEfficiency).toFixed(0)} tok/s.`);
@@ -2501,8 +2510,8 @@ function paneRecalculate(which) {
 
   const bwRatio = nvlinkInterNodeBw > 0 ? nvlinkIntraNodeBw / nvlinkInterNodeBw : 1;
   let nvlinkGpuPenalty = 1.0;
-  const gpusNeededPerTp = tp > 0 ? Math.ceil(gpusNeeded / tp) : gpusNeeded;
-  const tpFitsNode = gpusNeededPerTp <= gpusPerServer;
+  // IE-GAP-031: TP group spans nodes when TP > gpusPerServer (mirrors main pane)
+  const tpFitsNode = tp <= gpusPerServer;
   const tpIsCrossNode = tpCrossNode === 'cross-node' || (tpCrossNode === 'auto' && !tpFitsNode && tp > gpusPerServer);
   if (tpIsCrossNode) nvlinkGpuPenalty = 1.0 + Math.log10(Math.max(1, bwRatio)) * 0.15;
   const nvlinkAdjustedGpus = Math.ceil(gpusNeeded * nvlinkGpuPenalty);
@@ -2529,6 +2538,9 @@ function paneRecalculate(which) {
   const memBwTokensPerSec = gpu.bw * 1e9 / (effParams * 1e9 * (quantBpw / 8) / tp);
   let effectiveDecodeThroughput = memBwTokensPerSec / effectiveBatchEff;
   if (servingEngine === 'tgi') effectiveDecodeThroughput *= tgiBatchingMultiplier;
+  // IE-GAP-031: keep pane results consistent with the main pane — cross-node
+  // TP reduces effective decode throughput by the NVLink penalty.
+  if (tpIsCrossNode) effectiveDecodeThroughput /= nvlinkGpuPenalty;
   let effectiveRadixThroughput = effectiveDecodeThroughput, radixMultiplier = 1.0;
   if (servingEngine === 'sglang') {
     radixMultiplier = sglangCacheHitRate * 1.5 + (1.0 - sglangCacheHitRate) * (1.0 - sglangRadixTreeOverhead);
