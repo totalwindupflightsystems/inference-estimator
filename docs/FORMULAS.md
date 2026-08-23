@@ -107,6 +107,7 @@ Custom GPU default: `{ vram: 80, bw: 2000, price_hour: 2.00, tflops_bf16: 312 }`
 | TGI_DEFAULTS.maxBatchSize | 128 |
 | TGI_DEFAULTS.maxWaitingSequences | 256 |
 | TGI_DEFAULTS.maxTotalTokens | 65,536 |
+| TGI_DEFAULTS.occupancyFloor | 2/3 (IE-GAP-033) |
 | SGLANG_RADIX.cacheHitRate | 0.50 |
 | SGLANG_RADIX.prefixCacheSize | 4 (GB) |
 | SGLANG_RADIX.radixTreeOverhead | 0.05 |
@@ -758,19 +759,21 @@ This VRAM is added to `totalPerGpuGB`, competing with the KV cache.
 
 ---
 
-## 17. TGI Continuous Batching (CE-009)
+## 17. TGI Continuous Batching (CE-009 / IE-GAP-033)
 
-**Source code (line ~1267–1279):**
+**Source code (line ~957–1000):** shared helper `tgiBatchingMultiplierFor()`,
+the single source of truth called by BOTH `recalculate()` (line ~1380)
+and `paneRecalculate()` (line ~2515) — the two panes cannot drift apart.
 
 ```javascript
-if (servingEngine === 'tgi') {
-    const batchRatio = Math.min(1.0, batchSize / tgiMaxBatchSize);
-    const avgTokensPerReqTgi = ctxLen * 0.3;
-    const totalTokensInFlight = batchSize * avgTokensPerReqTgi;
-    const tokenBudgetRatio = Math.min(1.0, totalTokensInFlight / tgiMaxTotalTokens);
-    const combinedConstraint = Math.min(batchRatio, tokenBudgetRatio);
-    tgiBatchingMultiplier = combinedConstraint * engineCfg.batchEff;
-    tgiQueueDepth = tgiMaxWaitingSeqs / tgiMaxBatchSize;
+function tgiBatchingMultiplierFor(batchSize, ctxLen, tgiMaxBatchSize, tgiMaxTotalTokens, batchEff) {
+    const batchRatio = tgiMaxBatchSize > 0 ? Math.min(1.0, batchSize / tgiMaxBatchSize) : 1.0;
+    const occFloor = TGI_DEFAULTS.occupancyFloor;   // 2/3
+    const batchUtil = occFloor + (1.0 - occFloor) * (3*batchRatio*batchRatio - 2*batchRatio*batchRatio*batchRatio);
+    const totalTokensInFlight = batchSize * ctxLen * 0.3;
+    const tokenBudgetRatio = (tgiMaxTotalTokens > 0 && totalTokensInFlight > tgiMaxTotalTokens)
+        ? Math.max(0.0, tgiMaxTotalTokens / totalTokensInFlight) : 1.0;
+    return Math.min(batchUtil, tokenBudgetRatio) * batchEff;
 }
 ```
 
@@ -778,14 +781,52 @@ if (servingEngine === 'tgi') {
 
 ```
 batchRatio       = min(1, batchSize / tgiMaxBatchSize)
-tokenBudgetRatio = min(1, (batchSize × ctxLen × 0.3) / tgiMaxTotalTokens)
-combinedConstraint = min(batchRatio, tokenBudgetRatio)
-tgiBatchingMultiplier = combinedConstraint × engineCfg.batchEff   (0.75 for TGI)
+occupancyFloor   = 2/3
+batchUtil        = occupancyFloor + (1 − occupancyFloor) × smoothstep(batchRatio)
+smoothstep(x)    = 3x² − 2x³        (0 at x=0, 1 at x=1, S-shaped)
+tokenBudgetRatio = 1.0 when in-flight tokens ≤ tgiMaxTotalTokens, else
+                   tgiMaxTotalTokens / (batchSize × ctxLen × 0.3)
+tgiBatchingMultiplier = min(batchUtil, tokenBudgetRatio) × engineCfg.batchEff   (0.75 for TGI)
 tgiQueueDepth    = tgiMaxWaitingSeqs / tgiMaxBatchSize
 ```
 
+**Worked example** (DeepSeek V3, 8×H100, TP8, batch 8, 32K ctx — the
+real-browser finding behind IE-GAP-033):
+
+```
+batchRatio = 8/128 = 0.0625
+batchUtil  = 2/3 + (1/3) × smoothstep(0.0625) ≈ 0.670
+in-flight  = 8 × 32768 × 0.3 = 78,643 > 65,536 → tokenBudgetRatio = 65,536/78,643 ≈ 0.833
+multiplier = min(0.670, 0.833) × 0.75 ≈ 0.503   (was ≈0.047 pre-fix)
+decode     = raw/0.75 × 0.503 ≈ 864 tok/s vs vLLM ≈ 1523 tok/s (≈1.8x, not 19x)
+```
+
+**Self-correction (IE-GAP-033, 2026-08-23):** the previous CE-009 model was
+
+```
+batchRatio          = min(1, batchSize / tgiMaxBatchSize)
+tokenUtil           = min(1, (batchSize × ctxLen × 0.3) / tgiMaxTotalTokens)
+combinedConstraint  = min(batchRatio, tokenUtil)
+tgiBatchingMultiplier = combinedConstraint × engineCfg.batchEff
+```
+
+That is a linear capacity-utilization model: steady-state occupancy was
+treated as `batch/maxBatch`, so a healthy 8-sequence workload on a 128-max
+server looked 6.25% utilized and the multiplier collapsed to ≈0.047 — TGI
+decode read ~80 tok/s vs vLLM 1523 tok/s at batch 8 (19x slower, implausible
+for real TGI with 8 concurrent sequences on 8×H100). The token term was also
+inverted: `min(1, inFlight/maxTotal)` penalized SHORT contexts and never
+bound when in-flight tokens actually EXCEEDED `maxTotalTokens`. IE-GAP-033
+replaced the linear factor with a smoothstep occupancy curve (floor 2/3 —
+continuous batching keeps a modest batch near peak decode because the
+scheduler always has a ready sequence) and turned the token term into a
+genuine cap that binds only on overload.
+
 The `tgiBatchingMultiplier` is then applied as:
-`effectiveDecodeThroughput *= tgiBatchingMultiplier` (line ~1432).
+`effectiveDecodeThroughput *= tgiBatchingMultiplier` (line ~1538; cluster
+pane line ~2591). At saturation (batch ≥ maxBatchSize, within token budget)
+the multiplier is exactly `1.0 × batchEff = 0.75`, cancelling the `1/batchEff`
+boost — capacity behavior unchanged.
 
 ---
 

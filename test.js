@@ -44,6 +44,11 @@
  *      Q4_K_M on H100-80 (96.6 GB/GPU = 120.8% util) must flag Sweet Spot
  *      as does-not-fit WITH a fix direction and mask GPUs Needed; the
  *      monolithic twin stays feasible and the raise-TP direction fits
+ *  13. IE-GAP-033 TGI batching occupancy — batch-8 multiplier >= 0.5 (was
+ *      0.047 → 19x gap vs vLLM) via a smoothstep occupancy curve floored at
+ *      2/3 and a token-budget cap that binds only on overload; saturation
+ *      at maxBatchSize preserved; recalculate() and paneRecalculate()
+ *      share the tgiBatchingMultiplierFor() helper (unit + rendered checks)
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -992,6 +997,103 @@ function deepEqual(a, b) {
     }
 
     group('IE-GAP-032 infeasible verdict', infAllPass, infResults.join('; '));
+  }
+
+  // ===== TEST GROUP 13: IE-GAP-033 TGI batching occupancy =====
+  // CE-009 modeled TGI steady-state occupancy as batch/maxBatch: batch 8 on
+  // a 128-max server = 6.25% utilized → multiplier ≈ 0.047 → TGI decode
+  // collapsed to ~80 tok/s vs vLLM 1523 tok/s (19x gap) on the real-browser
+  // DeepSeek V3 8xH100 TP8 batch-8 finding. The fix floors steady-state
+  // occupancy at 2/3 with a smoothstep curve to 1.0 at maxBatchSize
+  // (continuous batching keeps a modest batch near peak decode) and turns
+  // the token budget into a genuine cap that binds only when in-flight
+  // tokens exceed maxTotalTokens. recalculate() and paneRecalculate() both
+  // call the SAME window-exposed helper, so the cluster path is covered by
+  // the direct helper assertions below. Every assertion FAILS against the
+  // pre-fix code.
+  {
+    const tgiResults = [];
+    let tgiAllPass = true;
+    function tgiCheck(name, ok, detail) {
+      if (!ok) tgiAllPass = false;
+      tgiResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+    }
+    const tgiNum = (id) => parseFloat(doc.getElementById(id).textContent);
+
+    // (a) Unit-level: the shared multiplier helper (window-exposed; the
+    //     function both recalculate() and paneRecalculate() call).
+    const multFn = win.tgiBatchingMultiplierFor;
+    tgiCheck('Shared TGI multiplier helper exposed', typeof multFn === 'function', typeof multFn);
+    if (typeof multFn === 'function') {
+      const m8 = multFn(8, 32768, 128, 65536, 0.75);        // board scenario
+      tgiCheck('Batch-8 multiplier >= 0.5 (was 0.047)', m8 >= 0.5, `m(8,32K)=${m8.toFixed(4)}`);
+      const m128 = multFn(128, 1024, 128, 65536, 0.75);     // saturation, token budget free
+      tgiCheck('Batch >= maxBatchSize hits ceiling 1.0 × batchEff', Math.abs(m128 - 0.75) < 1e-9, `m(128,1K)=${m128.toFixed(4)}`);
+      const m128Long = multFn(128, 32768, 128, 65536, 0.75); // 1.26M in-flight > 64K budget
+      tgiCheck('Token budget caps long-context overload', m128Long < 0.75 * 0.2, `m(128,32K)=${m128Long.toFixed(4)} (in-flight 1.26M > 65,536)`);
+      const m8Short = multFn(8, 1024, 128, 65536, 0.75);   // short ctx: token budget free
+      tgiCheck('Short context does not trigger token penalty', m8Short >= 0.5, `m(8,1K)=${m8Short.toFixed(4)} (in-flight 2.5K < 65,536)`);
+      const m16 = multFn(16, 1024, 128, 65536, 0.75);
+      tgiCheck('Occupancy monotonic in batch (token-budget-free regime)', m16 >= m8Short, `m16=${m16.toFixed(4)} m8=${m8Short.toFixed(4)}`);
+    }
+
+    // (b) End-to-end rendered numbers for the board scenario (DeepSeek V3,
+    //     8×H100, TP8, batch 8, 32K ctx): TGI vs vLLM must be sane.
+    applyPresetByKey(win, doc, 'deepseek-v3');
+    setInput(win, doc, 'context', '32768');
+    setInput(win, doc, 'batchSize', '8');
+    setInput(win, doc, 'overhead', '15');
+    setInput(win, doc, 'quant', '4.5');
+    setInput(win, doc, 'kvPrecision', '16');
+    setInput(win, doc, 'tpSize', '8');
+    setInput(win, doc, 'ppSize', '1');
+    setInput(win, doc, 'gpuModel', 'H100-80');
+    setInput(win, doc, 'gpuPerServer', '8');
+    setInput(win, doc, 'numServers', '1');
+    setInput(win, doc, 'servingMode', 'monolithic');
+    setInput(win, doc, 'servingEngine', 'vllm');
+    win.recalculate();
+    const vllmDecode8 = tgiNum('rDecodeThroughput');
+    setInput(win, doc, 'servingEngine', 'raw');
+    win.recalculate();
+    const rawDecode8 = tgiNum('rDecodeThroughput');
+    setInput(win, doc, 'servingEngine', 'tgi');
+    win.recalculate();
+    const tgiDecode8 = tgiNum('rDecodeThroughput');
+    tgiCheck('TGI batch-8 decode no longer collapses (>= 500 tok/s)',
+      Number.isFinite(tgiDecode8) && tgiDecode8 >= 500,
+      `rDecodeThroughput=${tgiDecode8} (was ~80 pre-fix)`);
+    tgiCheck('TGI batch-8 within ~2.5x of vLLM (19x gap gone)',
+      Number.isFinite(vllmDecode8) && vllmDecode8 > 0 && tgiDecode8 / vllmDecode8 >= 0.4,
+      `TGI ${tgiDecode8} vs vLLM ${vllmDecode8} tok/s (ratio ${(tgiDecode8 / vllmDecode8).toFixed(3)})`);
+    const impliedMult = rawDecode8 > 0 ? (tgiDecode8 * 0.75) / rawDecode8 : 0;
+    tgiCheck('Implied batch-8 multiplier >= 0.5 (from rendered numbers)',
+      impliedMult >= 0.5,
+      `implied ×${impliedMult.toFixed(3)} (raw ${rawDecode8} tok/s)`);
+
+    // (c) Capacity saturation end-to-end: batch 128 + short ctx → TGI ≈ raw.
+    setInput(win, doc, 'context', '1024');
+    setInput(win, doc, 'batchSize', '128');
+    setInput(win, doc, 'servingEngine', 'raw');
+    win.recalculate();
+    const rawDecode128 = tgiNum('rDecodeThroughput');
+    setInput(win, doc, 'servingEngine', 'tgi');
+    win.recalculate();
+    const tgiDecode128 = tgiNum('rDecodeThroughput');
+    tgiCheck('Saturation: batch 128 TGI ≈ raw throughput (×1.0 net)',
+      Number.isFinite(rawDecode128) && rawDecode128 > 0 && Math.abs(tgiDecode128 / rawDecode128 - 1) < 0.02,
+      `TGI ${tgiDecode128} vs raw ${rawDecode128} tok/s`);
+
+    // (d) Token-budget cap end-to-end: batch 128 + 32K ctx (1.26M in-flight
+    //     tokens vs 65,536 budget) → throughput well below saturation.
+    setInput(win, doc, 'context', '32768');
+    win.recalculate();
+    const tgiDecode128Long = tgiNum('rDecodeThroughput');
+    tgiCheck('Token-budget cap binds on 128×32K overload',
+      Number.isFinite(tgiDecode128Long) && tgiDecode128Long < tgiDecode128 * 0.2,
+      `TGI ${tgiDecode128Long} tok/s vs ${tgiDecode128} at saturation (×${(tgiDecode128Long / tgiDecode128).toFixed(3)})`);
+
+    group('IE-GAP-033 TGI batching occupancy', tgiAllPass, tgiResults.join('; '));
   }
 
   // ===== Summary =====

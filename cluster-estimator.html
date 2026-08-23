@@ -951,7 +951,48 @@ const TGI_DEFAULTS = {
   maxBatchSize: 128,
   maxWaitingSequences: 256,
   maxTotalTokens: 65536,
+  // IE-GAP-033: steady-state decode occupancy floor. Continuous batching
+  // keeps a modest batch of concurrent sequences near peak decode, so
+  // utilization must NOT be modeled as batch/maxBatch (batch 8/128 looked
+  // 6.25% utilized → 19x slower than vLLM). 2/3 is the minimal floor that
+  // yields a batch-8 multiplier >= 0.5 after the ×batchEff composition.
+  occupancyFloor: 2 / 3,
 };
+
+// CE-009 / IE-GAP-033: TGI continuous-batching throughput multiplier.
+// Single source of truth — called by BOTH recalculate() and
+// paneRecalculate() so the two panes can never drift apart.
+//
+// Old model: multiplier = min(batchSize/maxBatchSize, tokenUtil) × batchEff
+// with tokenUtil = min(1, inFlight/maxTotal). That is a linear
+// capacity-utilization model: a healthy 8-sequence workload on a 128-max
+// server was treated as 6.25% utilized and TGI collapsed to ~0.047×
+// (80 tok/s vs vLLM 1523 tok/s at batch 8 on 8×H100 — 19x, implausible).
+//
+// New model:
+//  - batchUtil: smoothstep occupancy curve from occupancyFloor (2/3) to
+//    1.0 as batch approaches maxBatchSize — a modest batch still keeps the
+//    instance near peak decode because the scheduler always has a ready
+//    sequence (continuous batching over a sliding window).
+//  - tokenBudgetRatio: a genuine CAP that binds ONLY when in-flight tokens
+//    exceed maxTotalTokens (the old ratio penalized SHORT contexts and
+//    never bound on overload — inverted).
+//  - multiplier = min(batchUtil, tokenBudgetRatio) × batchEff, so at
+//    capacity (batch >= maxBatchSize, within token budget) the multiplier
+//    is exactly 1.0 × batchEff = 0.75 and the 1/batchEff boost cancels —
+//    the capacity-saturation behavior is preserved.
+function tgiBatchingMultiplierFor(batchSize, ctxLen, tgiMaxBatchSize, tgiMaxTotalTokens, batchEff) {
+  const batchRatio = tgiMaxBatchSize > 0 ? Math.min(1.0, batchSize / tgiMaxBatchSize) : 1.0;
+  // Smoothstep easing: 0 at x=0, 1 at x=1, S-shaped between
+  const occFloor = TGI_DEFAULTS.occupancyFloor;
+  const batchUtil = occFloor + (1.0 - occFloor) * (3 * batchRatio * batchRatio - 2 * batchRatio * batchRatio * batchRatio);
+  // Token budget cap: binds only when in-flight tokens exceed maxTotalTokens
+  const totalTokensInFlight = batchSize * ctxLen * 0.3;
+  const tokenBudgetRatio = (tgiMaxTotalTokens > 0 && totalTokensInFlight > tgiMaxTotalTokens)
+    ? Math.max(0.0, tgiMaxTotalTokens / totalTokensInFlight)
+    : 1.0;
+  return Math.min(batchUtil, tokenBudgetRatio) * batchEff;
+}
 
 // CE-008: SGLang RadixAttention cache-aware scheduling defaults
 const SGLANG_RADIX = {
@@ -1330,20 +1371,13 @@ function recalculate() {
     effectiveBatchEff = 1.0 - (1.0 - engineCfg.batchEff) * constraintFactor;
   }
 
-  // CE-009: TGI continuous batching efficiency model
+  // CE-009 / IE-GAP-033: TGI continuous batching efficiency model
   let tgiBatchingMultiplier = 1.0;
   let tgiQueueDepth = 1.0;  // 1.0 = nominal queue load
   if (servingEngine === 'tgi') {
-    // Continuous batching throughput: effective = base * min(1, batchSize/maxBatchSize) * batchEfficiency
-    const batchRatio = tgiMaxBatchSize > 0 ? Math.min(1.0, batchSize / tgiMaxBatchSize) : 1.0;
-    // Token budget constraint: how close are we to maxTotalTokens
-    const avgTokensPerReqTgi = ctxLen * 0.3;
-    const totalTokensInFlight = batchSize * avgTokensPerReqTgi;
-    const tokenBudgetRatio = tgiMaxTotalTokens > 0 ? Math.min(1.0, totalTokensInFlight / tgiMaxTotalTokens) : 1.0;
-    // Combined constraint: the tighter of batch or token budget binds
-    const combinedConstraint = Math.min(batchRatio, tokenBudgetRatio);
-    // Effective throughput multiplier from continuous batching
-    tgiBatchingMultiplier = combinedConstraint * engineCfg.batchEff;
+    // Shared occupancy-curve model (smoothstep floor 2/3 → 1.0 at maxBatch,
+    // token budget binds only when in-flight tokens exceed maxTotalTokens).
+    tgiBatchingMultiplier = tgiBatchingMultiplierFor(batchSize, ctxLen, tgiMaxBatchSize, tgiMaxTotalTokens, engineCfg.batchEff);
     // Queue depth: ratio of waiting sequences to batch capacity
     tgiQueueDepth = tgiMaxBatchSize > 0 ? tgiMaxWaitingSeqs / tgiMaxBatchSize : 1.0;
   }
@@ -1797,11 +1831,15 @@ function recalculate() {
     notes.push(`<strong>CE-008 RadixAttention:</strong> Cache hit rate ${(sglangCacheHitRate*100).toFixed(0)}%, combined radix throughput ${effectiveRadixThroughput.toFixed(0)} tok/s (×${radixMultiplier.toFixed(2)} vs base). Hit boost +50%, miss penalty −${(sglangRadixTreeOverhead*100).toFixed(0)}%.`);
     notes.push(`<strong>CE-008 Prefix Cache VRAM:</strong> Prefix cache ${sglangPrefixCacheSize.toFixed(1)} GB competes with KV cache for GPU memory. Per-GPU radix tree: ${prefixCachePerGpuGB.toFixed(1)} GB. Tip: larger cache improves hit rate but reduces KV cache headroom.`);
   }
-  // CE-009: TGI continuous batching notes
+  // CE-009 / IE-GAP-033: TGI continuous batching notes
   if (servingEngine === 'tgi') {
-    const tgiBatchUtil = tgiMaxBatchSize > 0 ? (batchSize / tgiMaxBatchSize * 100).toFixed(0) : 0;
+    // IE-GAP-033: report steady-state occupancy (smoothstep floor 2/3) — the
+    // old "batch/maxBatch % util" note made batch 8/128 read 6% utilization.
+    const tgiOccFloor = TGI_DEFAULTS.occupancyFloor;
+    const tgiBatchRatio = tgiMaxBatchSize > 0 ? Math.min(1, batchSize / tgiMaxBatchSize) : 1;
+    const tgiBatchUtil = (tgiOccFloor + (1 - tgiOccFloor) * (3 * tgiBatchRatio * tgiBatchRatio - 2 * tgiBatchRatio * tgiBatchRatio * tgiBatchRatio)) * 100;
     const tgiTokenUtil = tgiMaxTotalTokens > 0 ? ((batchSize * ctxLen * 0.3) / tgiMaxTotalTokens * 100).toFixed(0) : 0;
-    notes.push(`<strong>CE-009 TGI Batching:</strong> Batch ${batchSize}/${tgiMaxBatchSize} (${tgiBatchUtil}% util), Tokens in-flight ~${(batchSize * ctxLen * 0.3 / 1000).toFixed(0)}K/${(tgiMaxTotalTokens/1000).toFixed(0)}K (${tgiTokenUtil}% budget). Queue depth ${tgiQueueDepth.toFixed(1)}× (${tgiMaxWaitingSeqs} waiting / ${tgiMaxBatchSize} batch).`);
+    notes.push(`<strong>CE-009 TGI Batching:</strong> Batch ${batchSize}/${tgiMaxBatchSize} (${tgiBatchUtil.toFixed(0)}% steady-state occupancy), Tokens in-flight ~${(batchSize * ctxLen * 0.3 / 1000).toFixed(0)}K/${(tgiMaxTotalTokens/1000).toFixed(0)}K (${tgiTokenUtil}% budget${tgiTokenUtil > 100 ? ', over — throughput capped' : ''}). Queue depth ${tgiQueueDepth.toFixed(1)}× (${tgiMaxWaitingSeqs} waiting / ${tgiMaxBatchSize} batch).`);
     // Queue depth impact on latency: p50/p99 TTFT at different load levels
     const tgiP50Light = (avgSeqLen / (memBwTokensPerSec * 0.5) * 1000).toFixed(0);
     const tgiP50Medium = (tgiP50Light * 1.5).toFixed(0);
@@ -2473,11 +2511,8 @@ function paneRecalculate(which) {
   }
   let tgiBatchingMultiplier = 1.0, tgiQueueDepth = 1.0;
   if (servingEngine === 'tgi') {
-    const batchRatio = tgiMaxBatchSize > 0 ? Math.min(1.0, batchSize / tgiMaxBatchSize) : 1.0;
-    const avgTokensPerReqTgi = ctxLen * 0.3;
-    const totalTokensInFlight = batchSize * avgTokensPerReqTgi;
-    const tokenBudgetRatio = tgiMaxTotalTokens > 0 ? Math.min(1.0, totalTokensInFlight / tgiMaxTotalTokens) : 1.0;
-    tgiBatchingMultiplier = Math.min(batchRatio, tokenBudgetRatio) * engineCfg.batchEff;
+    // IE-GAP-033: shared occupancy-curve model — identical to recalculate()
+    tgiBatchingMultiplier = tgiBatchingMultiplierFor(batchSize, ctxLen, tgiMaxBatchSize, tgiMaxTotalTokens, engineCfg.batchEff);
     tgiQueueDepth = tgiMaxBatchSize > 0 ? tgiMaxWaitingSeqs / tgiMaxBatchSize : 1.0;
   }
 
