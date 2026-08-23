@@ -40,6 +40,10 @@
  *      gpusPerServer so a 2-node TP group fires the cross-node penalty in
  *      auto mode; penalty is wired into decode/effective throughput so
  *      NVLink-900 vs PCIe-5 change headline metrics under cross-node)
+ *  12. IE-GAP-032 infeasible verdict — disaggregated TP8 32K DeepSeek V3
+ *      Q4_K_M on H100-80 (96.6 GB/GPU = 120.8% util) must flag Sweet Spot
+ *      as does-not-fit WITH a fix direction and mask GPUs Needed; the
+ *      monolithic twin stays feasible and the raise-TP direction fits
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -367,8 +371,15 @@ function deepEqual(a, b) {
     gapResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
   }
 
-  // (a) IE-GAP-011: TP×PP floor — TP=8 must never report fewer than 8 GPUs
+  // (a) IE-GAP-011: TP×PP floor — TP=8 must never report fewer than 8 GPUs.
+  //     Run on a FEASIBLE baseline: group 3(d) leaves context=1,000,000
+  //     (applyPreset restores model fields but not sliders), which lands at
+  //     379.6% util, and since IE-GAP-032 an infeasible config masks GPUs
+  //     Needed as 'N/A (infeasible)' — the floor assertion needs util ≤ 100
+  //     so the TP×PP floor is the binding constraint.
   applyPresetByKey(win, doc, manifest.models[0]);
+  setInput(win, doc, 'servingMode', 'monolithic');
+  setInput(win, doc, 'context', '4096');
   setInput(win, doc, 'tpSize', '8');
   setInput(win, doc, 'ppSize', '1');
   win.recalculate();
@@ -894,6 +905,93 @@ function deepEqual(a, b) {
     win.recalculate();
 
     group('CE-010 topology wiring (IE-GAP-031)', topoAllPass, topoResults.join('; '));
+  }
+
+  // ===== TEST GROUP 12: IE-GAP-032 disaggregated infeasibility =====
+  // A config whose per-GPU VRAM demand exceeds the GPU (>100% util) is
+  // PHYSICALLY INFEASIBLE: disaggregated KV is unsharded per GPU, so the
+  // TP×PP floor must not mask it as a plausible 'Tight fit'. Sweet Spot
+  // must flag infeasibility WITH a fix direction, GPUs Needed must not
+  // present the TP-floor value as a valid answer, and the identical config
+  // in monolithic mode (feasible) must keep the normal verdict. Every
+  // assertion FAILS against the pre-fix code ('Tight fit — no headroom'
+  // with GPUs Needed = 8 at 120.8% util).
+  {
+    const infResults = [];
+    let infAllPass = true;
+    function infCheck(name, ok, detail) {
+      if (!ok) infAllPass = false;
+      infResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+    }
+    const infNum = (id) => parseFloat(doc.getElementById(id).textContent);
+    const infText = (id) => doc.getElementById(id).textContent.trim();
+
+    // (a) The real-browser finding: DeepSeek V3 Q4_K_M, 32K ctx, batch 8,
+    //     TP=8, disaggregated on 1×8×H100-80 → 96.6 GB/GPU = 120.8% util.
+    applyPresetByKey(win, doc, 'deepseek-v3');
+    setInput(win, doc, 'context', '32768');
+    setInput(win, doc, 'batchSize', '8');
+    setInput(win, doc, 'overhead', '15');
+    setInput(win, doc, 'quant', '4.5');
+    setInput(win, doc, 'kvPrecision', '16');
+    setInput(win, doc, 'tpSize', '8');
+    setInput(win, doc, 'ppSize', '1');
+    setInput(win, doc, 'gpuModel', 'H100-80');
+    setInput(win, doc, 'servingEngine', 'vllm');
+    setInput(win, doc, 'gpuPerServer', '8');
+    setInput(win, doc, 'numServers', '1');
+    setInput(win, doc, 'servingMode', 'disaggregated');
+    win.recalculate();
+    {
+      const util = infNum('rUtil');
+      infCheck('Infeasible case util > 100%', Number.isFinite(util) && util > 100,
+        `rUtil=${doc.getElementById('rUtil').textContent} (expected 120.8%)`);
+      const utilCls = doc.getElementById('rUtil').parentElement.className;
+      infCheck('Infeasible case util class = bad', /(^| )bad( |$)/.test(utilCls),
+        `util card class=${utilCls}`);
+      const sweet = infText('rSweetSpot');
+      infCheck('Sweet Spot flags infeasibility', /does not fit/i.test(sweet),
+        `sweet="${sweet}"`);
+      infCheck('Sweet Spot carries a fix direction', /raise tp|reduce context|larger gpu/i.test(sweet),
+        `sweet="${sweet}"`);
+      infCheck('Sweet Spot is NOT Tight fit', !/tight fit/i.test(sweet),
+        `sweet="${sweet}"`);
+      const sweetCls = doc.getElementById('rSweetSpot').parentElement.className;
+      infCheck('Sweet Spot card painted bad (red)', /(^| )bad( |$)/.test(sweetCls),
+        `sweet card class=${sweetCls}`);
+      const gpus = infText('rGpusNeeded');
+      infCheck('GPUs Needed masked (not the TP-floor 8)',
+        /N\/A \(infeasible\)/.test(gpus) && !/^8$/.test(gpus),
+        `rGpusNeeded="${gpus}" (must not present 8 as a valid answer)`);
+    }
+
+    // (b) Same inputs, monolithic → KV sharded by TP → feasible; the normal
+    //     verdicts and a numeric GPUs Needed must survive untouched.
+    setInput(win, doc, 'servingMode', 'monolithic');
+    win.recalculate();
+    {
+      const util = infNum('rUtil');
+      infCheck('Monolithic twin stays feasible', Number.isFinite(util) && util <= 100,
+        `rUtil=${doc.getElementById('rUtil').textContent} (expected 74.4%)`);
+      const sweet = infText('rSweetSpot');
+      infCheck('Feasible twin keeps normal verdict', sweet !== '' && !/does not fit/i.test(sweet),
+        `sweet="${sweet}"`);
+      infCheck('Feasible twin GPUs Needed numeric', Number.isFinite(infNum('rGpusNeeded')),
+        `rGpusNeeded="${infText('rGpusNeeded')}"`);
+    }
+
+    // (c) Direction sanity: raising TP to 16 (shards the model weight
+    //     further) must bring the disaggregated config under 100% util.
+    setInput(win, doc, 'servingMode', 'disaggregated');
+    setInput(win, doc, 'tpSize', '16');
+    win.recalculate();
+    {
+      const util = infNum('rUtil');
+      infCheck('Raise-TP direction works (TP=16 fits)', Number.isFinite(util) && util < 100,
+        `rUtil=${doc.getElementById('rUtil').textContent} (expected 86.9%)`);
+    }
+
+    group('IE-GAP-032 infeasible verdict', infAllPass, infResults.join('; '));
   }
 
   // ===== Summary =====

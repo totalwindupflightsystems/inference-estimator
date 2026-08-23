@@ -1223,6 +1223,23 @@ function applyPreset() {
   recalculate();
 }
 
+// IE-GAP-032: sweet-spot verdict shared by the main pane and the compare
+// panes. gpuUtil > 100% means the per-GPU VRAM demand exceeds the GPU's
+// physical VRAM — physically infeasible at ANY GPU count (disaggregated KV
+// is unsharded per GPU, §4.1, and the TP×PP floor can mask this as a
+// plausible 'Tight fit'). Report infeasibility with a fix direction instead.
+function sweetSpotVerdict(gpuUtil, totalPerGpuGB, gpu, gpusNeeded, totalGpus) {
+  if (gpuUtil > 100) {
+    return `Does not fit on ${gpu.name}: ${gpuUtil.toFixed(1)}% util — ${totalPerGpuGB.toFixed(1)} GB/GPU > ${gpu.vram} GB. Raise TP/PP, reduce context/batch, or use a larger GPU`;
+  }
+  if (gpusNeeded <= totalGpus) {
+    const spare = totalGpus - gpusNeeded;
+    if (spare === 0) return 'Tight fit — no headroom';
+    return `Oversized: ${spare} spare GPU(s) — increase batch or context`;
+  }
+  return `Under-provisioned: need +${gpusNeeded - totalGpus} more GPU(s)`;
+}
+
 function recalculate() {
   const paramsB = parseFloat(document.getElementById('params').value) || 70;
   const arch = document.getElementById('arch').value;
@@ -1584,7 +1601,7 @@ function recalculate() {
   document.getElementById('rModelMem').textContent = modelWithOverhead.toFixed(1);
   document.getElementById('rKvCache').textContent = kvEngineOverhead.toFixed(2);
   document.getElementById('rTotalPerGpu').textContent = totalPerGpuGB.toFixed(1);
-  document.getElementById('rGpusNeeded').textContent = gpusNeeded;
+  document.getElementById('rGpusNeeded').textContent = gpuUtil > 100 ? 'N/A (infeasible)' : gpusNeeded;
   document.getElementById('rServersNeeded').textContent = serversNeeded;
   document.getElementById('rTotalCluster').textContent = totalClusterVram.toFixed(0);
   document.getElementById('rUtil').textContent = gpuUtil.toFixed(1) + '%';
@@ -1617,15 +1634,14 @@ function recalculate() {
     document.getElementById('rBreakeven').textContent = 'N/A';
   }
 
-  let sweetSpot = '';
-  if (gpusNeeded <= totalGpus) {
-    const spare = totalGpus - gpusNeeded;
-    if (spare === 0) sweetSpot = 'Tight fit — no headroom';
-    else sweetSpot = `Oversized: ${spare} spare GPU(s) — increase batch or context`;
-  } else {
-    sweetSpot = `Under-provisioned: need +${gpusNeeded - totalGpus} more GPU(s)`;
-  }
+  // IE-GAP-032: a config demanding more VRAM per GPU than the GPU has
+  // (gpuUtil > 100%) is physically infeasible — disaggregated KV is
+  // unsharded per GPU, so no GPU count fixes it and the TP×PP floor must
+  // not mask it as a 'Tight fit'. Report infeasible-with-direction instead,
+  // and paint the Sweet Spot card red like the util card.
+  const sweetSpot = sweetSpotVerdict(gpuUtil, totalPerGpuGB, gpu, gpusNeeded, totalGpus);
   document.getElementById('rSweetSpot').textContent = sweetSpot;
+  document.getElementById('rSweetSpot').parentElement.className = gpuUtil > 100 ? 'metric bad' : 'metric';
 
   // CE-006: Update comparison table
   document.getElementById('cmpSelfInput').textContent = '$' + costPer1MInput.toFixed(2) + '/1M';
@@ -2584,11 +2600,16 @@ function paneRecalculate(which) {
   setR('rModelMem', modelWithOverhead.toFixed(1));
   setR('rKvCache', kvEngineOverhead.toFixed(2));
   setR('rTotalPerGpu', totalPerGpuGB.toFixed(1));
-  setR('rGpusNeeded', gpusNeeded);
+  setR('rGpusNeeded', gpuUtil > 100 ? 'N/A (infeasible)' : gpusNeeded);
   setR('rServersNeeded', serversNeeded);
   setR('rTotalCluster', totalClusterVram.toFixed(0));
   setR('rUtil', gpuUtil.toFixed(1) + '%');
   const rUtilEl = pe(which, 'rUtil'); if (rUtilEl && rUtilEl.parentElement) rUtilEl.parentElement.className = 'metric ' + utilClass;
+  // IE-GAP-032: compare panes mirror the main-pane infeasible verdict —
+  // >100% util gets the does-not-fit direction and a red Sweet Spot card.
+  setR('rSweetSpot', sweetSpotVerdict(gpuUtil, totalPerGpuGB, gpu, gpusNeeded, totalGpus));
+  const rSweetEl = pe(which, 'rSweetSpot');
+  if (rSweetEl && rSweetEl.parentElement) rSweetEl.parentElement.className = gpuUtil > 100 ? 'metric bad' : 'metric';
   setR('rSysRam', sysRamGB.toFixed(0));
   setR('rNvme', nvmeGB.toFixed(0));
   setR('rTokensPerDollar', tokDollarFormatted);

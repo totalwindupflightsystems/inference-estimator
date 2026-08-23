@@ -256,6 +256,9 @@ gpuUtil = totalPerGpuGB / gpu.vram × 100
 ```
 
 - `< 80%` → green (ok), `80–95%` → amber (warn), `> 95%` → red (bad).
+- **IE-GAP-032:** `gpuUtil > 100%` additionally marks the configuration
+  *physically infeasible* — the Sweet Spot verdict reports it with a fix
+  direction and GPUs Needed renders as "N/A (infeasible)" (§5.1, §5.3).
 
 **Output card:** "GPU Utilization %" = `gpuUtil` (rounded to 1 dp).
 
@@ -286,6 +289,12 @@ serversNeeded = ⌈ gpusNeeded / gpusPerServer ⌉
   minimum physical cluster to serve the model is `max(gpusNeeded, TP × PP)`
   GPUs (the tool does not explicitly enforce this — it reports `gpusNeeded`
   directly).
+- **IE-GAP-032:** when `totalPerGpuGB > gpu.vram` (gpuUtil > 100%) the
+  configuration is *physically infeasible* — no GPU count can satisfy the
+  per-GPU demand, because disaggregated mode keeps the KV cache unsharded per
+  GPU (§4.1) and the TP × PP floor would otherwise present the overflow as a
+  valid answer. GPUs Needed renders as **"N/A (infeasible)"** and the Sweet
+  Spot verdict reports the infeasibility with a fix direction (§5.3).
 
 **Output cards:** "GPUs Needed" = `gpusNeeded` (integer). "Servers Needed" =
 `serversNeeded` (integer).
@@ -304,19 +313,27 @@ where `totalGpus = gpusPerServer × numServers`.
 
 ### 5.3 Sweet Spot
 
-**Source code (line ~1537–1544):**
+**Source code (line ~1537–1544, IE-GAP-032):**
 
 ```javascript
-if (gpusNeeded <= totalGpus) {
-    const spare = totalGpus - gpusNeeded;
-    if (spare === 0) sweetSpot = 'Tight fit — no headroom';
-    else sweetSpot = `Oversized: ${spare} spare GPU(s) — increase batch or context`;
-} else {
-    sweetSpot = `Under-provisioned: need +${gpusNeeded - totalGpus} more GPU(s)`;
-}
+const sweetSpot = sweetSpotVerdict(gpuUtil, totalPerGpuGB, gpu, gpusNeeded, totalGpus);
+// sweetSpotVerdict() verdicts, in priority order:
+//   gpuUtil > 100 → 'Does not fit on <GPU>: <util>% util — <GB> GB/GPU > <GB> GB.
+//                    Raise TP/PP, reduce context/batch, or use a larger GPU'
+//   spare === 0   → 'Tight fit — no headroom'
+//   spare > 0     → `Oversized: ${spare} spare GPU(s) — increase batch or context`
+//   else          → `Under-provisioned: need +${gpusNeeded - totalGpus} more GPU(s)`
 ```
 
 **Output card:** "Sweet Spot" — one of:
+- **"Does not fit on \<GPU\>: \<util\>% util — \<GB\> GB/GPU > \<GB\> GB. Raise
+  TP/PP, reduce context/batch, or use a larger GPU"** — IE-GAP-032: gpuUtil
+  > 100%, the per-GPU VRAM demand exceeds physical VRAM, so the config cannot
+  fit at any GPU count. Disaggregated mode keeps the KV cache unsharded per
+  GPU (§4.1), and the TP × PP floor would otherwise mask the overflow as a
+  tight fit. Fix directions: raise TP/PP (shards the model weight further),
+  reduce context/batch (shrinks the unsharded KV), or pick a larger GPU. The
+  card is painted red (`bad` class), and GPUs Needed shows "N/A (infeasible)".
 - **"Tight fit — no headroom"** — exactly enough GPUs.
 - **"Oversized: N spare GPU(s)"** — more GPUs configured than needed.
 - **"Under-provisioned: need +N more GPU(s)"** — not enough GPUs.
