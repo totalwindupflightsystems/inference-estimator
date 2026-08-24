@@ -17,7 +17,7 @@ Model params + quantization + context -> VRAM, KV cache, GPUs needed, sweet spot
 
 Open `cluster-estimator.html` in any browser. No dependencies, no build step.
 
-Full pricing features (cloud GPU pricing, API cost comparison) need the runtime-fetched model data, so serve the repo over HTTP: `python3 -m http.server 8000` then open http://localhost:8000/cluster-estimator.html. A `file://` URL uses the embedded fallback data (all 60 model presets and API pricing included), but cannot pick up live updates from `models/` -- for the best `file://`/offline experience, open `dist/inference-estimator-standalone.html` instead (see Distribution).
+Full pricing features (cloud GPU pricing, API cost comparison) need the runtime-fetched model data, so serve the repo over HTTP: `python3 -m http.server 8000` then open http://localhost:8000/cluster-estimator.html. A `file://` URL uses the embedded fallback data (all 60 model presets and API pricing included), but cannot pick up live updates from `models/` -- for the best `file://`/offline experience, open `dist/inference-estimator-standalone.html` instead -- note this file is gitignored build output: run `node scripts/build-standalone.js` first on a fresh clone (see Distribution).
 
 To run the regression suite (presets, roundtrip, edge cases): `npm install && npm test` (Node 18+).
 
@@ -40,7 +40,8 @@ Two distributions ship from this repo:
 - **`dist/inference-estimator-standalone.html`** — ~182 KB self-contained build
   with all 60 model presets inlined. Zero network requests, works from
   `file://` (double-click to open offline). The better distribution for local
-  / air-gapped use.
+  / air-gapped use. `dist/` is gitignored build output — not present on a
+  fresh clone: run `node scripts/build-standalone.js` first (see below).
 
 ### Regenerating the standalone build
 
@@ -49,8 +50,9 @@ node scripts/build-standalone.js   # reads cluster-estimator.html + models/*.jso
 node scripts/verify-standalone.js  # optional: proves all models load offline
 ```
 
-`dist/` is gitignored build output — regenerate after any change to
-`cluster-estimator.html` or `models/`.
+`dist/` is gitignored build output — not present on a fresh clone: run
+`node scripts/build-standalone.js` before using the standalone build, and
+regenerate after any change to `cluster-estimator.html` or `models/`.
 
 ## Architecture
 

@@ -27,11 +27,13 @@
  *      README/QUICKSTART, preset counts match models/index.json, standalone
  *      size claim within ±5% of the dist file, README links to the canonical
  *      docs/QUICKSTART.md)
- *   9. Dist freshness — IE-GAP-027 (dist/inference-estimator-standalone.html
+ *   9. Dist freshness — IE-GAP-027/037 (dist/inference-estimator-standalone.html
  *      is gitignored build output; distinctive source markers and the
  *      embedded preset count must match the current cluster-estimator.html +
  *      models/index.json, else the group fails with a 'dist is stale'
- *      message. Missing dist = SKIPPED warning, not a failure.)
+ *      message. Missing dist = FAIL when README/docs reference the dist path
+ *      (the documented file:// experience would 404 on a fresh clone);
+ *      missing AND unreferenced stays a SKIPPED warning.)
  *  10. Board evidence — IE-GAP-029 (scripts/verify-board-evidence.js must
  *      pass on the REAL board: every status=complete row carries a
  *      commit_hash that resolves in git; temp-copy negative fixtures with a
@@ -678,7 +680,7 @@ function deepEqual(a, b) {
     const actualKiB = distBytes / 1024;
     const badSizes = sizeClaims.filter(([name, claimed]) => Math.abs(claimed - actualKiB) / actualKiB > 0.05);
     docCheck('Standalone size claim within ±5% of dist',
-      distBytes > 0 && badSizes.length === 0,
+      distBytes === 0 || badSizes.length === 0,
       distBytes === 0
         ? 'dist file missing (build not regenerated) — size claims unchecked'
         : `${sizeClaims.map(([name, c]) => `${name}=${c} KB`).join(', ') || 'no size claims'} vs actual ${actualKiB.toFixed(1)} KiB`);
@@ -691,14 +693,16 @@ function deepEqual(a, b) {
     group('Docs consistency', docAllPass, docResults.join('; '));
   }
 
-  // ===== TEST GROUP 9: Dist freshness (IE-GAP-027) =====
+  // ===== TEST GROUP 9: Dist freshness (IE-GAP-027 / IE-GAP-037) =====
   // dist/inference-estimator-standalone.html is gitignored build output
   // (node scripts/build-standalone.js), so nothing in git forces a rebuild
   // after source/model changes. This group compares distinctive source
   // markers and the embedded preset count against the current
   // cluster-estimator.html + models/index.json and fails with a clear
-  // 'dist is stale' message on drift. A missing dist file is a SKIPPED
-  // warning, not a failure — fresh clones legitimately have no dist/.
+  // 'dist is stale' message on drift. IE-GAP-037: a missing dist file is a
+  // FAIL whenever a doc references the dist path — the documented file://
+  // experience would 404 on a fresh clone; missing AND unreferenced stays
+  // a SKIPPED warning (fresh clones legitimately have no dist/).
   {
     const distFreshResults = [];
     let distFreshPass = true;
@@ -710,8 +714,23 @@ function deepEqual(a, b) {
     const distFile = path.join(ROOT, 'dist', 'inference-estimator-standalone.html');
     const srcText = fs.readFileSync(HTML_FILE, 'utf8');
     if (!fs.existsSync(distFile)) {
-      group('Dist freshness', true,
-        'SKIPPED — dist/inference-estimator-standalone.html missing (run node scripts/build-standalone.js)');
+      // IE-GAP-037: a fresh clone has no dist/ (gitignored build output), but
+      // if README/docs point users at the dist file the documented path
+      // 404s — that is a FAIL with a build-first message, not a skip.
+      const docsRefDist = [
+        ['README.md', path.join(ROOT, 'README.md')],
+        ['docs/QUICKSTART.md', path.join(ROOT, 'docs', 'QUICKSTART.md')],
+      ]
+        .filter(([, p]) => fs.existsSync(p))
+        .filter(([, p]) => fs.readFileSync(p, 'utf8').includes('dist/inference-estimator-standalone.html'));
+      if (docsRefDist.length > 0) {
+        distCheck('dist referenced-but-missing', false,
+          `docs reference dist/inference-estimator-standalone.html but the file is missing on this checkout — run \`node scripts/build-standalone.js\` first (referenced by: ${docsRefDist.map(([n]) => n).join(', ')})`);
+        group('Dist freshness', distFreshPass, distFreshResults.join('; '));
+      } else {
+        group('Dist freshness', true,
+          'SKIPPED — dist/inference-estimator-standalone.html missing and unreferenced in docs (run node scripts/build-standalone.js to build it)');
+      }
     } else {
       const distText = fs.readFileSync(distFile, 'utf8');
       // Distinctive source markers that the build must carry through verbatim.
