@@ -667,15 +667,11 @@ if (servingEngine === 'vllm') {
 
 For vLLM, larger block size (32) reduces fragmentation waste to 8% vs 15%.
 
-**Output card:** "KV Waste %" — if `effectiveKvWaste == rawKvWaste` (1.30),
-displays "0% (baseline)"; otherwise displays `(effectiveKvWaste × 100 - 100)%`
-as savings relative to raw. Wait — actually the displayed value is
-`(effectiveKvWaste * 100).toFixed(1) + '%'`, showing the absolute waste
-percentage above 100% (e.g. vLLM shows "115.0%").
-
-**Correction:** The code is `effectiveKvWaste === rawKvWaste ? '0% (baseline)' :
-(effectiveKvWaste * 100).toFixed(1) + '%'`. So for vLLM it shows "115.0%",
-meaning the KV cache occupies 115% of its theoretical size (15% waste).
+**Output card:** "KV size vs raw %" — if `effectiveKvWaste == rawKvWaste` (1.30),
+displays "0% (baseline)"; otherwise displays `+((effectiveKvWaste - 1) × 100)%`
+rounded to whole percent — the KV cache size relative to its theoretical raw
+size. Example: vLLM blockSize 32 → "+8%" (cache occupies 108% of theoretical
+size, i.e. 8% fragmentation waste); vLLM otherwise → "+15%"; TGI → "+20%".
 
 ### 15.2 Effective Batch Efficiency
 

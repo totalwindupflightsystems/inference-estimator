@@ -628,7 +628,7 @@
     <div class="metric"><div class="value" id="rQueueDepth">—</div><div class="label">Effective Queue Depth (CE-016)</div></div>
     <!-- CE-007: Serving engine overhead metrics -->
     <div class="metric"><div class="value" id="rEffectiveThroughput">—</div><div class="label">Eff. Throughput tok/s (CE-007)</div></div>
-    <div class="metric"><div class="value" id="rKvWastePct">—</div><div class="label">KV Waste % (CE-007)</div></div>
+    <div class="metric"><div class="value" id="rKvWastePct">—</div><div class="label">KV size vs raw % (CE-007)</div></div>
     <div class="metric"><div class="value" id="rBatchEfficiency">—</div><div class="label">Batch Efficiency (CE-007)</div></div>
     <!-- CE-008: SGLang RadixAttention metrics -->
     <div class="metric"><div class="value" id="rSglangRadixThroughput">—</div><div class="label">SGLang Radix Tput tok/s (CE-008)</div></div>
@@ -1766,7 +1766,7 @@ function recalculate() {
 
   // CE-007: Engine overhead metrics
   document.getElementById('rEffectiveThroughput').textContent = effectiveDecodeThroughput.toFixed(0) + ' tok/s';
-  document.getElementById('rKvWastePct').textContent = effectiveKvWaste === rawKvWaste ? '0% (baseline)' : (effectiveKvWaste * 100).toFixed(1) + '%';
+  document.getElementById('rKvWastePct').textContent = effectiveKvWaste === rawKvWaste ? '0% (baseline)' : '+' + ((effectiveKvWaste - 1) * 100).toFixed(0) + '%';
   document.getElementById('rBatchEfficiency').textContent = batchEfficiencyPct.toFixed(0) + '%';
 
   // CE-008: SGLang RadixAttention metrics
