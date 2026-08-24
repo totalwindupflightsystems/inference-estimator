@@ -51,6 +51,11 @@
  *      2/3 and a token-budget cap that binds only on overload; saturation
  *      at maxBatchSize preserved; recalculate() and paneRecalculate()
  *      share the tgiBatchingMultiplierFor() helper (unit + rendered checks)
+ *  14. IE-GAP-035 MoE+EP (CE-012) — epSize=1 (EP disabled) skips all-to-all
+ *      + load-imbalance overhead: MoE-Adjusted GPUs == GPUs Needed, EP
+ *      efficiency 100.0%, note says "EP=1 (disabled)"; epSize>1 matches the
+ *      pre-fix formula; both recalculate() and paneRecalculate() paths
+ *      (DeepSeek V3 defaults: 256 experts, topK 8 → 8 vs 10 pre-fix)
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -1113,6 +1118,131 @@ function deepEqual(a, b) {
       `TGI ${tgiDecode128Long} tok/s vs ${tgiDecode128} at saturation (×${(tgiDecode128Long / tgiDecode128).toFixed(3)})`);
 
     group('IE-GAP-033 TGI batching occupancy', tgiAllPass, tgiResults.join('; '));
+  }
+
+  // ===== TEST GROUP 14: IE-GAP-035 MoE-adjusted GPUs (CE-012) =====
+  // epSize=1 (EP disabled) must NOT apply all-to-all / load-imbalance
+  // overhead: MoE-Adjusted GPUs == GPUs Needed and EP efficiency = 100.0%.
+  // epSize > 1 must reproduce the PRE-fix formula byte-for-byte (regression
+  // guard). Both recalculate() (main pane) and paneRecalculate() (compare
+  // panes) are exercised. Every epSize=1 assertion FAILS against the
+  // pre-fix code (which displayed 8 -> 10 with no explanation).
+  {
+    const epResults = [];
+    let epAllPass = true;
+    function epCheck(name, ok, detail) {
+      if (!ok) epAllPass = false;
+      epResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+    }
+
+    // DeepSeek V3 defaults (UI-real values): 256 experts, topK 8, 5% all-to-all,
+    // 10% load imbalance — the real-browser 2026-08-22 worked example
+    // (GPUs Needed 8, MoE-Adjusted GPUs 10 pre-fix).
+    applyPresetByKey(win, doc, 'deepseek-v3');
+    setInput(win, doc, 'context', '32768');
+    setInput(win, doc, 'batchSize', '8');
+    setInput(win, doc, 'overhead', '15');
+    setInput(win, doc, 'quant', '4.5');
+    setInput(win, doc, 'kvPrecision', '16');
+    setInput(win, doc, 'tpSize', '8');
+    setInput(win, doc, 'ppSize', '1');
+    setInput(win, doc, 'gpuModel', 'H100-80');
+    setInput(win, doc, 'gpuPerServer', '8');
+    setInput(win, doc, 'numServers', '1');
+    setInput(win, doc, 'servingMode', 'monolithic');
+    setInput(win, doc, 'servingEngine', 'vllm');
+    setInput(win, doc, 'numExperts', '256');
+    setInput(win, doc, 'topK', '8');
+    setInput(win, doc, 'allToAllOverhead', '5');
+    setInput(win, doc, 'loadBalancePenalty', '10');
+    win.recalculate();
+
+    const epNum = (id) => parseInt(doc.getElementById(id).textContent, 10);
+    const epText = (id) => doc.getElementById(id).textContent.trim();
+    const baseGpus = epNum('rGpusNeeded');
+
+    // Pre-fix CE-012 formula, recomputed here as the regression oracle.
+    function oldFormulaAdjusted(base, epSize, numExperts, topK, a2aPct, loadPct) {
+      const a2a = (a2aPct / 100) * (numExperts / epSize) * (topK / numExperts);
+      const imb = loadPct / 100;
+      return Math.ceil(base * (1 + a2a + imb));
+    }
+    function oldFormulaEfficiency(epSize, numExperts, topK, a2aPct, loadPct) {
+      if (epSize <= 1) return 100;
+      const a2a = (a2aPct / 100) * (numExperts / epSize) * (topK / numExperts);
+      const imb = loadPct / 100;
+      return (1 - a2a - imb) * 100;
+    }
+
+    // --- (a) Main pane, epSize=1: adjusted == base, efficiency 100% ---
+    setInput(win, doc, 'epSize', '1');
+    win.recalculate();
+    const mainBase = epText('rGpusNeeded');
+    const mainAdjusted1 = epText('rEpAdjustedGpus');
+    const mainEff1 = epText('rEpEfficiency');
+    epCheck('epSize=1: MoE-Adjusted GPUs == GPUs Needed', mainAdjusted1 === mainBase,
+      `rEpAdjustedGpus=${mainAdjusted1} vs rGpusNeeded=${mainBase}`);
+    epCheck('epSize=1: EP efficiency = 100.0%', mainEff1 === '100.0%',
+      `rEpEfficiency=${mainEff1}`);
+    epCheck('epSize=1: GPUs Needed unchanged at 8 (worked example)',
+      mainBase === '8', `rGpusNeeded=${mainBase}`);
+    const mainNote = doc.getElementById('notes').innerHTML;
+    epCheck('epSize=1: note states EP disabled (no fake 40% all-to-all)',
+      /EP=1 \(disabled\)/.test(mainNote) && !/All-to-all overhead 40/.test(mainNote),
+      `notes contains EP=1 (disabled): ${/EP=1 \(disabled\)/.test(mainNote)}`);
+    // The 5% x (256/1) x (8/256) = 40% fake all-to-all must NOT be rendered.
+    epCheck('epSize=1: note has no all-to-all overhead %', !/All-to-all overhead/.test(mainNote),
+      'note text: ' + mainNote.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 160));
+
+    // --- (b) Main renderer, epSize>1: byte-identical to the pre-fix formula ---
+    for (const epSize of [2, 4, 8]) {
+      setInput(win, doc, 'epSize', String(epSize));
+      win.recalculate();
+      const expectedGpus = oldFormulaAdjusted(baseGpus, epSize, 256, 8, 5, 10);
+      const expectedEff = oldFormulaEfficiency(epSize, 256, 8, 5, 10);
+      const adj = epNum('rEpAdjustedGpus');
+      const eff = epText('rEpEfficiency');
+      epCheck(`epSize=${epSize}: adjusted GPUs match pre-fix formula`,
+        adj === expectedGpus, `rEpAdjustedGpus=${adj} (expected ${expectedGpus})`);
+      epCheck(`epSize=${epSize}: efficiency matches pre-fix formula`,
+        eff === expectedEff.toFixed(1) + '%',
+        `rEpEfficiency=${eff} (expected ${expectedEff.toFixed(1)}%)`);
+    }
+
+    // --- (c) Compare-pane path (paneRecalculate), same config ---
+    // Enter compare mode: builds panes A/B from the live main-grid config,
+    // so paneA carries the exact same CE-012 values set above.
+    win.toggleCompareMode();
+    try {
+      // (c1) epSize=1: pane adjusted == pane base, efficiency 100%
+      const paneCfg = win.getConfig(); // full main-pane config (incl. epSize)
+      const cfg1 = Object.assign({}, paneCfg, { epSize: '1' });
+      win.paneSetConfig('A', cfg1);
+      win.paneRecalculate('A');
+      const paneBase = doc.getElementById('A_rGpusNeeded').textContent.trim();
+      const paneAdjusted1 = doc.getElementById('A_rEpAdjustedGpus').textContent.trim();
+      const paneEff1 = doc.getElementById('A_rEpEfficiency').textContent.trim();
+      epCheck('pane epSize=1: MoE-Adjusted GPUs == base',
+        paneAdjusted1 === paneBase,
+        `A_rEpAdjustedGpus=${paneAdjusted1} vs A_rGpusNeeded=${paneBase}`);
+      epCheck('pane epSize=1: EP efficiency = 100.0%', paneEff1 === '100.0%',
+        `A_rEpEfficiency=${paneEff1}`);
+      epCheck('pane epSize=1: base = 8 (worked example)', paneBase === '8',
+        `A_rGpusNeeded=${paneBase}`);
+
+      // (c2) epSize=2: pane adjusted matches the old formula
+      const cfg2 = Object.assign({}, paneCfg, { epSize: '2' });
+      win.paneSetConfig('A', cfg2);
+      win.paneRecalculate('A');
+      const paneAdjusted2 = parseInt(doc.getElementById('A_rEpAdjustedGpus').textContent, 10);
+      const expected2 = oldFormulaAdjusted(parseInt(paneBase, 10), 2, 256, 8, 5, 10);
+      epCheck('pane epSize=2: adjusted GPUs match old formula',
+        paneAdjusted2 === expected2, `A_rEpAdjustedGpus=${paneAdjusted2} (expected ${expected2})`);
+    } finally {
+      win.toggleCompareMode(); // restore the main pane for any later groups
+    }
+
+    group('IE-GAP-035 MoE+EP (CE-012)', epAllPass, epResults.join('; '));
   }
 
   // ===== Summary =====

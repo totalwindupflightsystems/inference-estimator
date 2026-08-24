@@ -1502,14 +1502,19 @@ function recalculate() {
     const loadBalancePenalty = parseFloat(document.getElementById('loadBalancePenalty').value) || 10;
 
     // All-to-all dispatch overhead: scales with (numExperts / epSize) * (topK / numExperts)
-    epAllToAllOverhead = (allToAllOverheadPct / 100) * (numExperts / epSize) * (topK / numExperts);
-    // Load imbalance penalty
-    epLoadImbOverhead = loadBalancePenalty / 100;
-    // Combined EP overhead
-    const epCombinedOverhead = 1 + epAllToAllOverhead + epLoadImbOverhead;
+    // IE-GAP-035: EP overhead only applies when EP is enabled (epSize > 1).
+    // With epSize=1 there is no expert sharding — no all-to-all dispatch and
+    // no load-imbalance penalty, so the adjusted GPU count stays at the base.
+    if (epSize > 1) {
+      epAllToAllOverhead = (allToAllOverheadPct / 100) * (numExperts / epSize) * (topK / numExperts);
+      // Load imbalance penalty
+      epLoadImbOverhead = loadBalancePenalty / 100;
+      // Combined EP overhead
+      const epCombinedOverhead = 1 + epAllToAllOverhead + epLoadImbOverhead;
 
-    // Effective GPU count adjusted for EP overhead
-    epAdjustedGpus = Math.ceil(gpusNeeded * epCombinedOverhead);
+      // Effective GPU count adjusted for EP overhead
+      epAdjustedGpus = Math.ceil(gpusNeeded * epCombinedOverhead);
+    }
     // Experts per GPU (after EP sharding)
     epExpertsPerGpu = epSize > 1 ? Math.ceil(numExperts / epSize) : numExperts;
     // EP efficiency: how much of the all-to-all bandwidth is usable
@@ -1810,6 +1815,8 @@ function recalculate() {
     const epNoteNumExperts = parseInt(document.getElementById('numExperts').value) || MOE_EXPERT_CONFIG.defaultNumExperts;
     if (epNoteEpSize > 1) {
       notes.push(`<strong>CE-012 Expert Parallelism:</strong> EP=${epNoteEpSize} — ${epNoteNumExperts} experts sharded to ${epExpertsPerGpu}/GPU. All-to-all overhead ${(epAllToAllOverhead*100).toFixed(1)}%, load imbalance ${(epLoadImbOverhead*100).toFixed(1)}%. EP efficiency ${epEfficiency.toFixed(1)}%. Adjusted GPUs: ${epAdjustedGpus} (base: ${gpusNeeded}).`);
+    } else {
+      notes.push(`<strong>CE-012 Expert Parallelism:</strong> EP=1 (disabled) — no all-to-all or load-imbalance overhead; Adjusted GPUs = base (${epAdjustedGpus}).`);
     }
   }
   if (tp > 1) notes.push(`<strong>TP=${tp}:</strong> Model sharded across ${tp} GPUs. Per-GPU model: ${modelPerGpuGB.toFixed(1)} GB.`);
@@ -2574,11 +2581,17 @@ function paneRecalculate(which) {
     const epSize = parseInt(cfg.epSize) || 1;
     const allToAllOverheadPct = parseFloat(cfg.allToAllOverhead) || 5;
     const loadBalancePenalty = parseFloat(cfg.loadBalancePenalty) || 10;
-    const epAllToAllOverhead = (allToAllOverheadPct / 100) * (numExperts / epSize) * (topK / numExperts);
-    const epLoadImbOverhead = loadBalancePenalty / 100;
-    const epCombinedOverhead = 1 + epAllToAllOverhead + epLoadImbOverhead;
-    epAdjustedGpus = Math.ceil(gpusNeeded * epCombinedOverhead);
-    epEfficiency = epSize > 1 ? ((1 - epAllToAllOverhead - epLoadImbOverhead) * 100) : 100;
+    // IE-GAP-035: EP overhead only applies when EP is enabled (epSize > 1).
+    // With epSize=1 there is no expert sharding — no all-to-all dispatch and
+    // no load-imbalance penalty, so the adjusted GPU count stays at the base
+    // (mirrors the recalculate() CE-012 block).
+    if (epSize > 1) {
+      const epAllToAllOverhead = (allToAllOverheadPct / 100) * (numExperts / epSize) * (topK / numExperts);
+      const epLoadImbOverhead = loadBalancePenalty / 100;
+      const epCombinedOverhead = 1 + epAllToAllOverhead + epLoadImbOverhead;
+      epAdjustedGpus = Math.ceil(gpusNeeded * epCombinedOverhead);
+      epEfficiency = ((1 - epAllToAllOverhead - epLoadImbOverhead) * 100);
+    }
   }
 
   const gpuUtil = (totalPerGpuGB / gpu.vram) * 100;
