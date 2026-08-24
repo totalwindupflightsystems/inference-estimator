@@ -210,7 +210,7 @@
     <h2>Quantization & Context</h2>
     <div class="field">
       <label>Quantization <span class="slider-val" id="quantLabel">Q4_K_M (4.5 bpw)</span></label>
-      <select id="quant" onchange="document.getElementById('quantLabel').textContent=this.options[this.selectedIndex]?.text||''">
+      <select id="quant" onchange="document.getElementById('quantLabel').textContent=this.options[this.selectedIndex]?.text||'';this.removeAttribute('data-clamped-from');recalculate()">
         <option value="4.5">Q4_K_M (~4.5 bpw)</option>
         <option value="4.0">Q4_0 (~4.0 bpw)</option>
         <option value="5.0">Q5_K_M (~5.0 bpw)</option>
@@ -1620,17 +1620,24 @@ function recalculate() {
 
   // IE-GAP-021: visible validation — blank/invalid core inputs must warn
   // instead of silently rendering unreliable (or, pre-IE-GAP-019, NaN) numbers.
+  // IE-GAP-036: an out-of-list quant (clamped to the first option by setConfig
+  // on import/share/localStorage load) keeps the banner up too, via the
+  // data-clamped-from marker the clamp leaves on the select.
   const quantEl = document.getElementById('quant');
   const validationBanner = document.getElementById('validationBanner');
   if (validationBanner) {
     const quantBlank = !quantEl.value;
-    const coreInvalid = quantBlank || !Number.isFinite(quantBpw) || !Number.isFinite(kvBpw) ||
+    const quantClampedFrom = quantEl.getAttribute('data-clamped-from') || '';
+    const quantClamped = !quantBlank && !!quantClampedFrom;
+    const coreInvalid = quantClamped || quantBlank || !Number.isFinite(quantBpw) || !Number.isFinite(kvBpw) ||
       !Number.isFinite(paramsB) || !Number.isFinite(activeB);
     if (coreInvalid) {
       validationBanner.style.display = '';
       validationBanner.textContent = quantBlank
         ? '⚠ Select a quantization.'
-        : '⚠ Invalid input — check quantization and model fields; results below may be unreliable.';
+        : quantClamped
+          ? `⚠ Quantization "${quantClampedFrom}" is not supported — results below use ${quantEl.selectedOptions[0]?.text || ''}; pick a supported quantization to dismiss.`
+          : '⚠ Invalid input — check quantization and model fields; results below may be unreliable.';
     } else {
       validationBanner.style.display = 'none';
     }
@@ -1984,7 +1991,31 @@ function getConfig() {
   };
 }
 
+// IE-GAP-036: quant clamp visibility. When an incoming config carries a quant
+// value with no matching <option> (import / share link / localStorage load),
+// IE-GAP-019 already clamps the select to the first option (Q4_K_M). This
+// makes that clamp VISIBLE: mark the select so recalculate() keeps the
+// validation banner up until the user picks a value manually, and queue a
+// status flash naming the original value and the fallback.
+let quantClampFlashPending = null;
+function quantClampNotice(selectEl, wantedValue) {
+  const fallbackText = selectEl.options[0]?.text || '';
+  quantClampFlashPending = `quant "${wantedValue}" not supported — using ${fallbackText}`;
+  selectEl.selectedIndex = 0;
+  selectEl.setAttribute('data-clamped-from', String(wantedValue));
+  // Render immediately: paths with no follow-up flash (share-link decode,
+  // compare-pane setConfig) must still surface the warning, and a later
+  // flashStatus in the same action merges the pending copy (below).
+  const st = document.getElementById('status');
+  if (st) {
+    st.textContent = quantClampFlashPending;
+    st.style.color = 'var(--danger)';
+    st.classList.add('show');
+  }
+}
+
 function setConfig(cfg) {
+  quantClampFlashPending = null; // IE-GAP-036: each applied config owns the queue
   for (const [k, v] of Object.entries(cfg)) {
     const el = document.getElementById(k);
     if (!el) continue;
@@ -2008,13 +2039,23 @@ function setConfig(cfg) {
     // IE-GAP-019: a value with no matching <option> would leave the select
     // blank (''), which then parses as NaN in the math. Fall back to the
     // first option (the page default) instead of a blank select.
+    // IE-GAP-036: that fallback used to be silent — an exported 3.5 bpw
+    // config became Q4_K_M with no warning. Flag the quant case so
+    // recalculate() keeps the validation banner up and the user gets a
+    // visible flash naming the original value and the fallback.
     if (el.tagName === 'SELECT') {
       let matched = false;
       const want = String(v);
       for (let i = 0; i < el.options.length; i++) {
         if (el.options[i].value === want) { el.selectedIndex = i; matched = true; break; }
       }
-      if (!matched) el.selectedIndex = 0;
+      if (!matched) {
+        if (k === 'quant') {
+          quantClampNotice(el, want);
+        } else {
+          el.selectedIndex = 0;
+        }
+      }
       continue;
     }
     el.value = v;
@@ -2111,7 +2152,15 @@ function loadConfig() {
 
 function flashStatus(msg, isErr) {
   const el = document.getElementById('status');
-  el.textContent = msg;
+  // IE-GAP-036: callers that follow setConfig() with a success flash
+  // ('Imported ✓', 'Loaded ✓') must not clobber the clamp warning queued by
+  // quantClampNotice — merge it into the visible message instead.
+  let shown = msg;
+  if (!isErr && quantClampFlashPending && !shown.includes(quantClampFlashPending)) {
+    shown = `${quantClampFlashPending} · ${msg}`;
+  }
+  quantClampFlashPending = null;
+  el.textContent = shown;
   el.style.color = isErr ? 'var(--danger)' : 'var(--accent2)';
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2000);
@@ -2289,6 +2338,7 @@ function paneGetConfig(which) {
 }
 
 function paneSetConfig(which, cfg) {
+  quantClampFlashPending = null; // IE-GAP-036: each applied config owns the queue
   for (const [k, v] of Object.entries(cfg)) {
     const elem = pe(which, k);
     if (!elem) continue;
@@ -2308,13 +2358,21 @@ function paneSetConfig(which, cfg) {
     }
     // IE-GAP-019: select with no matching option → fall back to first option
     // (page default) instead of a blank select that parses as NaN (compare pane)
+    // IE-GAP-036: same visibility rule as the main pane — the quant clamp
+    // queues a status flash (single global #status element serves both panes).
     if (elem.tagName === 'SELECT') {
       let matched = false;
       const want = String(v);
       for (let i = 0; i < elem.options.length; i++) {
         if (elem.options[i].value === want) { elem.selectedIndex = i; matched = true; break; }
       }
-      if (!matched) elem.selectedIndex = 0;
+      if (!matched) {
+        if (k === 'quant') {
+          quantClampNotice(elem, want);
+        } else {
+          elem.selectedIndex = 0;
+        }
+      }
       continue;
     }
     elem.value = v;
@@ -2324,7 +2382,7 @@ function paneSetConfig(which, cfg) {
   if (pe(which,'ctxLabel')) pe(which,'ctxLabel').textContent = parseInt(cfg.context || 32768).toLocaleString();
   if (pe(which,'gpuPerLabel')) pe(which,'gpuPerLabel').textContent = cfg.gpuPerServer || 8;
   if (pe(which,'serverLabel')) pe(which,'serverLabel').textContent = cfg.numServers || 1;
-  if (pe(which,'quantLabel')) { const qs = pe(which,'quant'); qs.value = cfg.quant; pe(which,'quantLabel').textContent = qs.selectedOptions[0]?.text || ''; }
+  if (pe(which,'quantLabel')) pe(which,'quantLabel').textContent = (pe(which,'quant').selectedOptions[0] || {}).text || '';
   if (pe(which,'archLabel')) pe(which,'archLabel').textContent = (cfg.arch || 'dense') === 'moe' ? 'MoE' : 'Dense';
   if (pe(which,'sglangHitLabel')) pe(which,'sglangHitLabel').textContent = parseFloat(cfg.sglangCacheHitRate || 0.5).toFixed(2);
   if (pe(which,'epLabel')) pe(which,'epLabel').textContent = cfg.epSize || 1;

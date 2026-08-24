@@ -56,6 +56,13 @@
  *      efficiency 100.0%, note says "EP=1 (disabled)"; epSize>1 matches the
  *      pre-fix formula; both recalculate() and paneRecalculate() paths
  *      (DeepSeek V3 defaults: 256 experts, topK 8 → 8 vs 10 pre-fix)
+ *  15. IE-GAP-036 quant clamp visibility — an imported/shared/stored quant
+ *      with no matching <option> (e.g. an exported 3.5 bpw) clamps to
+ *      Q4_K_M VISIBLY: status flash names the original value + fallback
+ *      (merged into 'Imported ✓' rather than clobbered by it), the
+ *      validation banner stays up until a manual pick, rendered numbers
+ *      stay finite, and the compare pane clamps identically without ever
+ *      leaving the pane select blank
  *
  * NOTE on lexical scope: MODEL_PRESETS is declared with `let` at the top level
  * of the inline <script>, so it lives in the script's lexical scope and is NOT
@@ -578,8 +585,11 @@ function deepEqual(a, b) {
       hardenCheck('Import results finite (no NaN)', badImp.length === 0 && literalImp.length === 0,
         `non-finite=${badImp.map((b) => b.label).join(',') || 'none'} literal=${literalImp.map((el) => el.id).join(',') || 'none'}`);
       const bannerImp = doc.getElementById('validationBanner');
-      hardenCheck('Import leaves banner hidden (valid state)', !!(bannerImp && bannerImp.style.display === 'none'),
-        `banner display=${bannerImp ? bannerImp.style.display : 'missing'}`);
+      // IE-GAP-036: quant '3.5' has no matching <option> — the clamp is now
+      // VISIBLE, so the banner must stay up (was hidden pre-fix) until the
+      // user picks a supported quantization.
+      hardenCheck('Import of out-of-list quant keeps banner visible', !!(bannerImp && bannerImp.style.display !== 'none' && /not supported/i.test(bannerImp.textContent)),
+        `banner display=${bannerImp ? bannerImp.style.display : 'missing'} text=${JSON.stringify(bannerImp ? bannerImp.textContent.slice(0, 120) : '')}`);
       hardenCheck('Import restores preset from file', doc.getElementById('modelPreset').value === 'deepseek-v3',
         `preset=${JSON.stringify(doc.getElementById('modelPreset').value)} (expect "deepseek-v3")`);
     }
@@ -1243,6 +1253,141 @@ function deepEqual(a, b) {
     }
 
     group('IE-GAP-035 MoE+EP (CE-012)', epAllPass, epResults.join('; '));
+  }
+
+  // ===== TEST GROUP 15: IE-GAP-036 quant clamp visibility =====
+  // A config carrying a quant value with no matching <option>('3.5' — e.g. an
+  // exported 3.5 bpw intent) must clamp to Q4_K_M VISIBLY on every entry
+  // path: the status flash names the original value and the fallback (and
+  // survives 'Imported ✓' instead of being clobbered by it), the validation
+  // banner persists until the user picks a supported quantization manually,
+  // rendered numbers stay finite, and the compare pane clamps identically
+  // without ever leaving its select blank (the old qs.value=cfg.quant bypass).
+  {
+    const qcResults = [];
+    let qcAllPass = true;
+    function qcCheck(name, ok, detail) {
+      if (!ok) qcAllPass = false;
+      qcResults.push(`${ok ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
+    }
+
+    const clampRe = /3\.5.*not supported.*Q4_K_M/i;
+
+    function assertFinite(docRef, tag) {
+      const nums = collectRenderedNumbers(docRef);
+      const bad = nums.filter((n) => !Number.isFinite(n.value));
+      const literal = [...docRef.querySelectorAll('.metric .value')].filter((el) => /NaN|Infinity/.test(el.textContent));
+      qcCheck(`${tag}: rendered numbers stay finite`, bad.length === 0 && literal.length === 0,
+        `non-finite=${bad.map((b) => b.label).join(',') || 'none'} literal=${literal.map((el) => el.id).join(',') || 'none'}`);
+    }
+
+    // Clean slate: valid quant, no stale clamp marker, banner hidden.
+    applyPresetByKey(win, doc, 'deepseek-v3');
+    setInput(win, doc, 'quant', '8.0');
+    win.recalculate();
+    const qsel = doc.getElementById('quant');
+    qsel.removeAttribute('data-clamped-from');
+
+    // --- (a) setConfig path (decodeHashToConfig / loadConfig route here) ---
+    const cfgA = win.getConfig();
+    cfgA.quant = '3.5';
+    win.setConfig(cfgA);
+    qcCheck('setConfig: quant select clamped to Q4_K_M (never blank)',
+      qsel.value === '4.5' && !!qsel.value,
+      `quant=${JSON.stringify(qsel.value)} (expect "4.5")`);
+    qcCheck('setConfig: clamp marked on select',
+      qsel.getAttribute('data-clamped-from') === '3.5',
+      `data-clamped-from=${JSON.stringify(qsel.getAttribute('data-clamped-from'))}`);
+    qcCheck('setConfig: status flash names original value + fallback',
+      clampRe.test(doc.getElementById('status').textContent),
+      JSON.stringify(doc.getElementById('status').textContent));
+    win.recalculate();
+    const bannerA = doc.getElementById('validationBanner');
+    qcCheck('setConfig: validation banner visible after recalculate',
+      !!(bannerA && bannerA.style.display !== 'none' && /not supported/i.test(bannerA.textContent)),
+      `display=${bannerA ? bannerA.style.display : 'missing'} text=${JSON.stringify(bannerA ? bannerA.textContent.slice(0, 120) : '')}`);
+    assertFinite(doc, 'setConfig');
+
+    // Picking a supported quantization manually dismisses the persistent warn.
+    setInput(win, doc, 'quant', '8.0'); // change event clears the clamp marker
+    win.recalculate();
+    qcCheck('Manual pick clears clamp warning',
+      !!(bannerA && bannerA.style.display === 'none') && !qsel.hasAttribute('data-clamped-from'),
+      `display=${bannerA.style.display} marker=${qsel.hasAttribute('data-clamped-from')}`);
+
+    // --- (b) Real importConfig() File path: flash merges with 'Imported ✓' ---
+    {
+      const impCfg = win.getConfig();
+      impCfg.quant = '3.5';
+      const file = new win.File([JSON.stringify(impCfg)], 'cluster-config.json', { type: 'application/json' });
+      let fileInput = null;
+      const origClick = win.HTMLInputElement.prototype.click;
+      win.HTMLInputElement.prototype.click = function () {
+        if (this.type === 'file') { fileInput = this; return; }
+        return origClick.apply(this, arguments);
+      };
+      win.importConfig();
+      win.HTMLInputElement.prototype.click = origClick;
+      if (fileInput) {
+        Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
+        fileInput.dispatchEvent(new win.Event('change', { bubbles: true }));
+        // FileReader.onload fires asynchronously (~10ms in jsdom) — yield so
+        // the real import chain completes BEFORE asserting (group 6 pattern).
+        await new Promise((r) => setTimeout(r, 150));
+        qcCheck('importConfig: quant clamped to Q4_K_M', qsel.value === '4.5',
+          `quant=${JSON.stringify(qsel.value)}`);
+        const statusText = doc.getElementById('status').textContent;
+        qcCheck('importConfig: clamp flash survives alongside Imported ✓',
+          clampRe.test(statusText) && /Imported/i.test(statusText),
+          JSON.stringify(statusText));
+        qcCheck('importConfig: banner visible', !!(bannerA && bannerA.style.display !== 'none'),
+          `display=${bannerA ? bannerA.style.display : 'missing'}`);
+        assertFinite(doc, 'importConfig');
+      } else {
+        qcCheck('importConfig creates file input', false, 'no input captured');
+      }
+    }
+
+    // Restore a clean valid state (and a marker-free select) before the panes:
+    // buildPane clones the live grid HTML, marker included.
+    setInput(win, doc, 'quant', '8.0');
+    win.recalculate();
+
+    // --- (c) Compare-pane path (paneSetConfig): same clamp semantics ---
+    win.toggleCompareMode();
+    try {
+      const paneQsel = doc.getElementById('A_quant');
+      const cfgP = Object.assign({}, win.getConfig(), { quant: '3.5' });
+      win.paneSetConfig('A', cfgP);
+      win.paneRecalculate('A');
+      qcCheck('paneSetConfig: pane quant clamped, never blank',
+        !!paneQsel.value && paneQsel.value === '4.5',
+        `A_quant=${JSON.stringify(paneQsel.value)} (expect "4.5")`);
+      qcCheck('paneSetConfig: clamp flash surfaces via global status',
+        clampRe.test(doc.getElementById('status').textContent),
+        JSON.stringify(doc.getElementById('status').textContent));
+      qcCheck('paneSetConfig: quant label reflects the clamped option',
+        /Q4_K_M/.test(doc.getElementById('A_quantLabel').textContent),
+        JSON.stringify(doc.getElementById('A_quantLabel').textContent));
+      const paneBadIds = [...doc.querySelectorAll('#paneAResults .metric .value')]
+        .filter((el) => /NaN|Infinity/.test(el.textContent)).map((el) => el.id);
+      qcCheck('pane: no NaN renders', paneBadIds.length === 0, paneBadIds.join(',') || 'clean');
+      // A MATCHED quant must not queue any clamp message: simulate the
+      // copyToPaneB tail (paneSetConfig then a success flash).
+      win.paneSetConfig('A', Object.assign({}, win.getConfig(), { quant: '4.0' }));
+      doc.getElementById('status').textContent = '';
+      win.flashStatus('Pane import ✓');
+      qcCheck('paneSetConfig: matched quant does not queue a clamp flash',
+        doc.getElementById('status').textContent === 'Pane import ✓',
+        JSON.stringify(doc.getElementById('status').textContent));
+    } finally {
+      win.toggleCompareMode(); // restores the main grid + recalculate()
+    }
+
+    qcCheck('Main grid restored after compare exit', qsel.value === '8.0',
+      `quant=${JSON.stringify(qsel.value)}`);
+
+    group('IE-GAP-036 quant clamp visibility', qcAllPass, qcResults.join('; '));
   }
 
   // ===== Summary =====
