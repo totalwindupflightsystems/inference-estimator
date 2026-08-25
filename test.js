@@ -717,6 +717,32 @@ function deepEqual(a, b) {
       formulasLink ? (formulasDoc ? 'docs/FORMULAS.md' : 'link present but docs/FORMULAS.md MISSING')
                    : 'no link to docs/FORMULAS.md found');
 
+    // (f) CHANGELOG freshness — newest "## YYYY-MM-DD" entry must not be older
+    // than the newest commit date, so shipped changes can't silently go
+    // unchangelogged for weeks again.
+    {
+      const changelog = readText(path.join(ROOT, 'CHANGELOG.md'));
+      const headMatch = changelog ? /^##\s*(\d{4}-\d{2}-\d{2})\s*$/m.exec(changelog) : null;
+      if (!headMatch) {
+        docCheck('CHANGELOG date freshness', false, changelog
+          ? 'no "## YYYY-MM-DD" section heading found in CHANGELOG.md'
+          : 'CHANGELOG.md MISSING');
+      } else {
+        const gitOut = spawnSync('git', ['log', '-1', '--format=%cs'], { cwd: ROOT, encoding: 'utf8' });
+        const lastCommit = (gitOut.stdout || '').trim();
+        if (gitOut.error || !/^\d{4}-\d{2}-\d{2}$/.test(lastCommit)) {
+          docCheck('CHANGELOG date freshness', true,
+            `SKIPPED (git unavailable): newest CHANGELOG entry ${headMatch[1]}`);
+        } else if (headMatch[1] < lastCommit) {
+          docCheck('CHANGELOG date freshness', false,
+            `stale: newest CHANGELOG entry ${headMatch[1]} is older than newest commit ${lastCommit} — add a section for recent changes`);
+        } else {
+          docCheck('CHANGELOG date freshness', true,
+            `newest CHANGELOG entry ${headMatch[1]} >= newest commit ${lastCommit}`);
+        }
+      }
+    }
+
     group('Docs consistency', docAllPass, docResults.join('; '));
   }
 
