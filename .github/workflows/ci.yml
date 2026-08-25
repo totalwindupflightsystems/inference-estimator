@@ -10,6 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Board-evidence group (group 10) resolves every complete row's
+          # commit_hash via git cat-file — a shallow clone cannot resolve
+          # older hashes, so fetch full history.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -23,6 +28,12 @@ jobs:
       # for the real-browser smoke suite (test-browser.js).
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+
+      # dist/inference-estimator-standalone.html is gitignored (build output)
+      # but referenced by README/docs — the dist-freshness group (group 9)
+      # FAILs on a fresh checkout without it. Build before testing.
+      - name: Build standalone dist
+        run: node scripts/build-standalone.js
 
       - name: Run tests (node test.js && node test-browser.js)
         run: npm test
