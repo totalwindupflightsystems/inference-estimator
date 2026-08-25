@@ -29,6 +29,10 @@ It documents the hash state format (base64-encoded JSON in `location.hash`),
 the full 60-field JSON export schema, and iframe embedding (no postMessage API;
 use the standalone build for offline embeds).
 
+See also: [docs/FORMULAS.md](docs/FORMULAS.md) for every formula behind the
+estimates, and [docs/GLOSSARY.md](docs/GLOSSARY.md) for a definition of each
+input field.
+
 ## Distribution
 
 Two distributions ship from this repo:

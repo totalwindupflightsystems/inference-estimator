@@ -634,7 +634,7 @@ function deepEqual(a, b) {
       `${names.length}/${expectedCount} options, sorted=${sameOrder}, missing=${missing.length}`);
   }
 
-  // ===== TEST GROUP 8: Docs consistency (IE-GAP-024 / IE-GAP-025) =====
+  // ===== TEST GROUP 8: Docs consistency (IE-GAP-024 / IE-GAP-025 / IE-GAP-040) =====
   // README.md + root QUICKSTART.md must carry no stale "42" preset-count
   // references and no stale "166 KB" size claim; every preset-count claim in
   // README/QUICKSTART must match models/index.json (60); the standalone size
@@ -704,6 +704,18 @@ function deepEqual(a, b) {
     const qsLink = /\[[^\]]*Quick Start[^\]]*\]\(docs\/QUICKSTART\.md\)/i.exec(readme || '');
     docCheck('README links to docs/QUICKSTART.md', !!qsLink && !!docQuickstart,
       qsLink ? 'docs/QUICKSTART.md' : 'no link to docs/QUICKSTART.md found');
+
+    // (e) README links to the formula reference and input glossary (IE-GAP-040)
+    const glossaryLink = /\[[^\]]*GLOSSARY[^\]]*\]\(docs\/GLOSSARY\.md\)/i.exec(readme || '');
+    const formulasLink = /\[[^\]]*FORMULAS[^\]]*\]\(docs\/FORMULAS\.md\)/i.exec(readme || '');
+    const glossaryDoc = readText(path.join(ROOT, 'docs', 'GLOSSARY.md'));
+    const formulasDoc = readText(path.join(ROOT, 'docs', 'FORMULAS.md'));
+    docCheck('README links to docs/GLOSSARY.md', !!glossaryLink && !!glossaryDoc,
+      glossaryLink ? (glossaryDoc ? 'docs/GLOSSARY.md' : 'link present but docs/GLOSSARY.md MISSING')
+                   : 'no link to docs/GLOSSARY.md found');
+    docCheck('README links to docs/FORMULAS.md', !!formulasLink && !!formulasDoc,
+      formulasLink ? (formulasDoc ? 'docs/FORMULAS.md' : 'link present but docs/FORMULAS.md MISSING')
+                   : 'no link to docs/FORMULAS.md found');
 
     group('Docs consistency', docAllPass, docResults.join('; '));
   }
