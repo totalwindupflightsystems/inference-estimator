@@ -19,7 +19,7 @@ Open `cluster-estimator.html` in any browser. No dependencies, no build step.
 
 Full pricing features (cloud GPU pricing, API cost comparison) need the runtime-fetched model data, so serve the repo over HTTP: `python3 -m http.server 8000` then open http://localhost:8000/cluster-estimator.html. A `file://` URL uses the embedded fallback data (all 60 model presets and API pricing included), but cannot pick up live updates from `models/` -- for the best `file://`/offline experience, open `dist/inference-estimator-standalone.html` instead -- note this file is gitignored build output: run `node scripts/build-standalone.js` first on a fresh clone (see Distribution).
 
-To run the regression suite (presets, roundtrip, edge cases): `npm install && npm test` (Node 18+).
+To run the regression suite (presets, roundtrip, edge cases): `npm install && npm test` (Node 22).
 
 ## Integration
 

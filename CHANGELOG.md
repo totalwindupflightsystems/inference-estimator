@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-08-26
+
+### Changed
+- CONTRIBUTING.md testing docs updated: both harnesses named (test.js = 15 jsdom groups ~6s; test-browser.js = 7 real-browser Playwright checks ~3-4s), the three fresh-clone prerequisites documented (build dist first, `npx playwright install chromium`, full git history / fetch-depth 0), and the Node version claim corrected to 22 in README + CONTRIBUTING so a fresh clone following the documented steps gets a green `npm test` (IE-GAP-041)
+
 ## 2026-08-25
 
 ### Added
