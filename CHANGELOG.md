@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-27
+
+### Fixed
+- `scripts/build-standalone.js` now reports the real on-disk byte count of the written file (fs.statSync) instead of the in-memory string length — the printed number now matches `wc -c` exactly (IE-GAP-044)
+- README standalone size claim corrected to ~190 KB (was ~182 KB, stale vs the 194,633-byte build) and the docs-consistency test tolerance tightened from ±5% to ±1% so the claim can't drift again (IE-GAP-042)
+- README test instructions now list the full fresh-clone prerequisites: `npx playwright install chromium` and the build-first step, so a user following README alone gets a green `npm test` (IE-GAP-043)
+
 ## 2026-08-26
 
 ### Changed
