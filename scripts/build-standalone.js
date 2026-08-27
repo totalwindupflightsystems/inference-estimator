@@ -154,4 +154,4 @@ if (!html.includes('(embedded standalone)')) {
 fs.mkdirSync(path.dirname(OUT_HTML), { recursive: true });
 fs.writeFileSync(OUT_HTML, html);
 console.log(`OK: ${OUT_HTML}`);
-console.log(`    ${modelIds.length} models embedded, 0 fetch() calls, ${html.length} bytes`);
+console.log(`    ${modelIds.length} models embedded, 0 fetch() calls, ${fs.statSync(OUT_HTML).size} bytes`);

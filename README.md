@@ -19,7 +19,7 @@ Open `cluster-estimator.html` in any browser. No dependencies, no build step.
 
 Full pricing features (cloud GPU pricing, API cost comparison) need the runtime-fetched model data, so serve the repo over HTTP: `python3 -m http.server 8000` then open http://localhost:8000/cluster-estimator.html. A `file://` URL uses the embedded fallback data (all 60 model presets and API pricing included), but cannot pick up live updates from `models/` -- for the best `file://`/offline experience, open `dist/inference-estimator-standalone.html` instead -- note this file is gitignored build output: run `node scripts/build-standalone.js` first on a fresh clone (see Distribution).
 
-To run the regression suite (presets, roundtrip, edge cases): `npm install && npm test` (Node 22).
+To run the regression suite (presets, roundtrip, edge cases): `npm install && npx playwright install chromium && node scripts/build-standalone.js && npm test` (Node 22). The build-first step generates the gitignored standalone build that the dist-freshness group checks, and `npx playwright install chromium` provides the browser binary that `test-browser.js` drives.
 
 ## Integration
 
@@ -41,7 +41,7 @@ Two distributions ship from this repo:
   `models/` at runtime. Requires an HTTP server (or the GitHub Pages deploy);
   `file://` uses the embedded fallback (all 60 presets + API pricing baked in,
   no live updates).
-- **`dist/inference-estimator-standalone.html`** — ~182 KB self-contained build
+- **`dist/inference-estimator-standalone.html`** — ~190 KB self-contained build
   with all 60 model presets inlined. Zero network requests, works from
   `file://` (double-click to open offline). The better distribution for local
   / air-gapped use. `dist/` is gitignored build output — not present on a

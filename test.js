@@ -693,8 +693,8 @@ function deepEqual(a, b) {
       while ((m = re.exec(txt)) !== null) sizeClaims.push([name, parseFloat(m[1])]);
     }
     const actualKiB = distBytes / 1024;
-    const badSizes = sizeClaims.filter(([name, claimed]) => Math.abs(claimed - actualKiB) / actualKiB > 0.05);
-    docCheck('Standalone size claim within ±5% of dist',
+    const badSizes = sizeClaims.filter(([name, claimed]) => Math.abs(claimed - actualKiB) / actualKiB > 0.01);
+    docCheck('Standalone size claim within ±1% of dist',
       distBytes === 0 || badSizes.length === 0,
       distBytes === 0
         ? 'dist file missing (build not regenerated) — size claims unchecked'
