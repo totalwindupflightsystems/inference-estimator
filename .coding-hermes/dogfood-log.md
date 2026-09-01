@@ -71,3 +71,5 @@
   (audits #254-258: "NO PUT"); registration healthy (namespace_id
   coding-hermes, enabled, no zombies). 6 pending tasks wait for the next
   scheduled tick (~6h cadence).
+2026-09-01 | SHIPPABLE | 20s t2fs | friction 4 | 3 findings
+
