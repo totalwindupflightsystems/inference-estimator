@@ -73,3 +73,33 @@
   scheduled tick (~6h cadence).
 2026-09-01 | SHIPPABLE | 20s t2fs | friction 4 | 3 findings
 
+## 2026-09-01 (run #4, ~17:30) — SHIPPABLE (verification pass, real browser)
+
+- **Promise:** unchanged (single-file HTML cluster sizing, 60 presets, two
+  distributions, zero deps).
+- **Method:** the check the foreman's own tests can't do — all six 08-22
+  findings (IE-GAP-031..036), marked complete on the board, were re-driven in
+  Playwright/Chromium: real file import, real downloads, real share-link cold
+  loads, both distributions. Plus fresh surface: compare mode, SGLang radix,
+  1,000-user concurrency, TGI+spec, export, save/load, 1M-ctx / 1000-GPU /
+  IQ2_XXS / FP32 extremes.
+- **Verdict:** SHIPPABLE. **All six fixes CONFIRMED FIXED** (topology changes
+  decode tput 2,564→3,047→2,758 across NVLink/IB/PCIe, PP path wired;
+  disagg infeasible reads "Does not fit…Raise TP/PP"; TGI ratio 1.76× not
+  19×; KV label "+15%"; EP@1 = 8=8; clamp status + visible banner on import
+  of quant "3.5"). Worked example byte-exact on both distributions (23.9 /
+  42.37 / 59.6 / 8 / 74.4% / 1523 / 80865 / $19.92 / 26.4B); 21/22 fresh
+  checks pass; 0 console errors.
+- **Top 3 findings (new, all P2, filed):**
+  1. IE-GAP-045 — compare pane ignores PP cross-node (tpIsCrossNode-only gate).
+  2. IE-GAP-046 — cross-node penalty is ratio-based: 1:1 InfiniBand = free.
+  3. IE-GAP-047 — disagg "Does not fit" verdict doesn't recompute at new TP.
+- **Time-to-first-success:** ~20 s. Friction count: 3 (filed above) + 4
+  driver artifacts (preset labels, toFixed display, download race, detached
+  import input — documented in docs/dogfood/2026-09-01-verification.md).
+- **Left behind:** docs/dogfood/2026-09-01-verification.md, board tasks
+  IE-GAP-045..047, dogfood event 308, tasks.md rewritten, SKILL.md v1.2.0.
+- **Foreman:** NOT woken — cooldown 21600s is the documented fleet pin
+  (audits #254-258: NO PUT); foreman was actively ticking during this run and
+  3 fresh pending tasks await it.
+
