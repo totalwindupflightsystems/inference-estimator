@@ -103,3 +103,5 @@
   (audits #254-258: NO PUT); foreman was actively ticking during this run and
   3 fresh pending tasks await it.
 
+2026-09-04 | SHIPPABLE | 30s t2fs | friction 4 | 5 findings
+
