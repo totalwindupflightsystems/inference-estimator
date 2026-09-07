@@ -94,3 +94,12 @@ Downloading Chrome Headless Shell 151.0.7922.34 (playwright chromium-headless-sh
 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 114.7 MiB
 |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 114.7 MiB
 Chrome Headless Shell 151.0.7922.34 (playwright chromium-headless-shell v1234) downloaded to /tmp/dj-judge/run2/.cache/ms-playwright/chromium_headless_shell-1234 completed with an empty log in sandboxed HOME, and there is no standalone  escape hatch — the browser leg cannot be independently run or verifie
+
+## Dogfood Findings (2026-09-07)
+Verdict: SHIPPABLE
+Promise: Static single-file HTML web app: open cluster-estimator.html in any browser (file:// works with embedded fallback data; serve over HTTP for live model-library updates). No CLI binary, no HTTP server API, no library, no MCP, no cron — the tool is the HTML file itself, with Node-based test harness.
+- [P1] npm test exits 1 on CHANGELOG freshness gate; && short-circuit blocks the browser leg — Verified live: npm test REAL_EXIT=1 — newest CHANGELOG entry 2026-08-27 < newest commit 2026-09-07, so the Docs-consistency group fails and package.json's 'node test.js && node test-browser.js' never runs the browser leg.
+- [P2] Port 8000 occupied by pre-existing listener; docs give no alternate-port note — ss -tlnp confirms 0.0.0.0:8000 held by a uvicorn app + docker-proxy (not the estimator); user had to discover 8018. README's 'python3 -m http.server 8000' has no fallback-port note — environment friction, not a tool defect.
+- [P2] Fresh file:// open with DeepSeek V3 preset shows infeasible state until TP=8 — Report: 595.5% util, N/A GPUs on fresh open. Test suite confirms the infeasible verdict is intentional and well-designed (GPUs masked as 'N/A (infeasible)', sweet-spot card gives fix direction 'Raise TP/PP...'), but docs/QUICKSTART doesn't warn the worked example only renders after setting TP=8.
+- [P2] Control IDs (tpSize, ppSize, servingEngine) undocumented — Worked example's TP=8 step can't be driven from docs alone — user had to read the DOM to find element IDs. GLOSSARY.md documents concepts but not control names/IDs.
+- [P2] Import JSON file input created transiently by button handler — no headless automation path — Live-UI Import JSON can't be driven headlessly; round-trip only provable via test suite (which passes: importConfig creates file input, sanitizes poisoned quant, restores preset). Docs gap for automation, not a functional break.

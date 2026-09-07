@@ -105,3 +105,4 @@
 
 2026-09-04 | SHIPPABLE | 30s t2fs | friction 4 | 5 findings
 
+2026-09-07 | SHIPPABLE | 8s t2fs | friction 5 | 5 findings
