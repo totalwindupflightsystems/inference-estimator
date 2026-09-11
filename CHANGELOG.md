@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-10
+
+### Added
+- Dogfood verification report for the 2026-09-01 real-browser re-drive — `docs/dogfood/2026-09-01-verification.md`: the worked example is byte-exact on both distributions (23.9 / 42.37 / 59.6 / 8 / 74.4% / 1523 / 80865 / $19.92 / 26.4B), 21/22 fresh checks pass, 0 console errors, plus the friction log and the residual P2 findings (IE-GAP-045..047)
+
+### Changed
+- `skills/inference-estimator-usage` SKILL.md v1.1.0 -> v1.2.0 — the six 2026-08-22 gaps (IE-GAP-031..036) are now documented as verified FIXED by real-browser re-drive, and the caveat list is narrowed to the residual IE-GAP-045..047 items
+- `.gitreins/config.yaml` tier-1 `lint` guard disabled — this static HTML/JS repo carries no ESLint flat config, so the judge's `npx eslint .` exited 2 on every verdict while tier-2 criteria PASS; env-dependent lint noise, not a finding, re-enable if a real flat-config setup lands (INT-CI-001)
+- No user-facing tool changes in this window: `cluster-estimator.html`, `models/`, `docs/`, `scripts/` and both test harnesses are unchanged since the 2026-08-27 entry — everything below is docs, CI-config and board upkeep
+
+### Maintenance
+- QA/dogfood/board upkeep only, no product code: recurring QA cron runs filing findings (through 2026-09-09), dogfood runs on 2026-09-01 / 09-04 / 09-07 (all SHIPPABLE), the CLN-1 folder-structure cleanup task filed (2026-09-06), one malformed board JSONL row repaired, and IE-CI-001 injected once this CHANGELOG freshness gate went red
+
 ## 2026-08-27
 
 ### Fixed
