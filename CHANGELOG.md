@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-16
+
+### Fixed
+- `npm test` is green again on master: the `Board evidence` group FAILed on 7 complete rows without a `commit_hash` (BT-053-ROLLOUT-2026-09-28, DF-INFERENCE-ESTIMATOR-1-R4, -1-R5, -2-R5, -3-R5, -4-R3, README-4). Dispositions: README-4 is real work and was backfilled with its actual closure commit `178201c` (weekly README audit, 2026-10-19); the five `DF-INFERENCE-ESTIMATOR-*-R*` rows were 2026-09-30 duplicate-id backfill artifacts (`superseded-by-earliest`, no work behind them) and were removed, each with its live tracker recorded (IE-CI-002, QA-INFERENCE-ESTIMATOR-2-R7, -3-R7, -4-R3, -5); BT-053-ROLLOUT-2026-09-28 was a fleet-rollout receipt whose artifact is host state (`.git/hooks/pre-commit`), verified present and invoking `boardctl validate` before removal. The gate itself is unchanged — no exemptions, no weakened rules — and now reports `76 complete rows, 76 with commit_hash, 0 missing` (IE-CI-002)
+- `CHANGELOG date freshness` gate (IE-CI-001's rule) is satisfied again by this section, which is the only change needed on the docs side — the rule, its threshold and the `## YYYY-MM-DD` heading format are untouched (IE-CI-002)
+
+### Maintenance
+- No user-facing tool changes in this window (2026-09-10 .. 2026-11-16): 30 commits landed, 29 of them board/QA upkeep — 28 touch `.coding-hermes/board/tasks.jsonl` (qa-cron finding commits 2026-10-02 .. 2026-11-03, board filings for the README/DOC/IE-CI rows, acceptance-criteria backfills) — and the single non-board commit is the previous changelog refresh `3ec82eb` itself. `cluster-estimator.html`, `models/`, `scripts/`, `docs/`, `test.js` and `test-browser.js` are byte-unchanged across the window, so no estimate, preset, formula or documented workflow changed (IE-CI-002)
+- Board hygiene: `boardctl validate` stays at 0 errors through the prune (141 warnings, all WARN-ONLY canon-drift); the removed rows are recorded as `task_removed` events 383..388 with their tracker ids so the audit trail survives the deletion (IE-CI-002)
+
 ## 2026-09-10
 
 ### Added
