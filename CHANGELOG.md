@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-17
+
+### Maintenance
+- Requirements plane for this project now exists on the kanban board `inference-estimator`: four goal cards — `t_b66f49a8` (G1 fresh-clone build + CI gate stays green), `t_4fc8e560` (G2 estimator math matches the tool's claims), `t_8652e456` (G3 docs tell the truth the product ships), `t_905292c2` (G4 QA batteries execute and their verdicts are trustworthy) — each citing its open `.coding-hermes/board/tasks.jsonl` rows by full id. All 50 open rows are cited by exactly one owning card (the one deliberate cross-reference is `QA-INFERENCE-ESTIMATOR-README-1`, owned by G1 and cited by G4's AC5), and all four cards are subscribed to the COS channel with `notify+wake`
+- Board drift repair from the 2026-11-17 card-manager pass: seven rows whose premise no longer reproduces at `a3ea05f` (README-2, README-3, README-3-R2, README-3-R2-R2, QA-INFERENCE-ESTIMATOR-4, QA-INFERENCE-ESTIMATOR-2-R7, QA-INFERENCE-ESTIMATOR-README-1) carry a `foreman_note` with the live evidence (`npm test` exit 0, `scripts/verify-board-evidence.js` exit 0, CHANGELOG freshness, CI run ids), and the three P1s were demoted to P3 so a refuted row stops occupying `boardctl next`. Rows are not closed here — closure needs the owning lane's own evidence run — and the row count is unchanged at 127 (renumber never delete)
+- QA host blocker re-measured and found cleared: `bunker-mvp` `/` is 85% used (122G of 150G, 23G available) against the 94% battery preflight threshold that refused every launch on 2026-11-03 at 98%. The two disk-blocked rows (QA-INFERENCE-ESTIMATOR-README-4, QA-INFERENCE-ESTIMATOR-DOCS-1) now carry that measurement as a note and are dispatchable again
+- This section also repairs the `Docs consistency` group, which FAILed at `5dbe572`: that commit touched only `.coding-hermes/board/tasks.jsonl` yet advanced the newest commit date to 2026-11-17 while the newest CHANGELOG section was still 2026-11-16, so `CI` run 44081869911 is red for exactly that reason. The gate's rule, threshold and `## YYYY-MM-DD` heading format are unchanged; the structural follow-up that exempts board-only commits from the date comparison is filed as `IE-CI-003`
+- No user-facing tool change: `cluster-estimator.html`, `models/`, `docs/`, `scripts/`, `test.js` and `test-browser.js` are byte-unchanged in this window
+
 ## 2026-11-16
 
 ### Fixed
