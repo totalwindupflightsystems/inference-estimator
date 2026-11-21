@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-21
+
+### Maintenance
+- Requirements-plane upkeep from the 2026-11-21 card-manager pass — no product change: `cluster-estimator.html`, `models/`, `docs/`, `scripts/`, `test.js` and `test-browser.js` are byte-unchanged, and the implementation board changed by exactly two rows (notes only, renumber never delete, 128 rows / 77 complete / 51 open before and after)
+- `QA-INFERENCE-ESTIMATOR-README-2` ("heavy suite exceeds configured memory cap") premise refuted by measurement at HEAD: `/usr/bin/time -v npm test` exits 0 with 15/15 groups and a peak RSS of 404044 KB (~395 MiB), ~7.8x under the 3145728 KB cap the 2026-11-02 chaos cell reported — the OOM is consistent with a harness-cap artifact, not a product memory defect
+- `QA-INFERENCE-ESTIMATOR-README-3` ("missing-config behavior is unverified") premise narrowed: the documented start command `python3 -m http.server 8000` exists in `README.md` and `docs/QUICKSTART.md`, and invalid-config fallback is coded at `cluster-estimator.html:2147-2149` and `2216-2218`; what is genuinely missing is a test asserting that fallback (`grep -c 'Corrupted storage' test.js` = 0). Both rows still carry no acceptance criteria and stay undispatchable — arming or closing them remains the owning QA lane's call
+- G4 goal card current state refreshed: `bunker-mvp` `/` re-measured at 82% used (118G of 150G, 26G available, load 0.01) against the 94% battery preflight threshold, below the 2026-11-18 reading; repo truth unchanged at `d56ca17` (CI run 44183684448 success), `node scripts/verify-board-evidence.js` exit 0 (`77 complete rows, 77 with commit_hash, 0 missing`), acceptance-gate audit 51 open / 5 failing (all `empty`) / 46 passing, and 51/51 open rows cited by a goal card
+- This section also satisfies the `Docs consistency` CHANGELOG-freshness check for a board-only commit; the structural exemption that lets board-only commits skip the date comparison remains filed as `IE-CI-003`
+
 ## 2026-11-17
 
 ### Maintenance
