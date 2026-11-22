@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-22
+
+### Maintenance
+- Requirements-plane upkeep from the 2026-11-22 card-manager pass — no product change: `cluster-estimator.html`, `models/`, `docs/`, `scripts/`, `test.js` and `test-browser.js` are byte-unchanged, and the implementation board still holds 128 rows / 77 complete / 51 open in the same id order before and after
+- Criteria-key canon drift repaired across 27 rows, tool-supported and proven line-by-line against a pre-pass board copy: 25 rows whose acceptance criteria lived only under the legacy `acceptance` key were renamed to the canon `acceptance_criteria` with `boardctl update <id> --normalize`, and the two rows that carried BOTH keys with byte-identical text (`README-3-R2-R2`, `README-5-R2`) had the legacy key dropped so dispatchability has one source of truth. `boardctl validate` moved 144 -> 118 warnings, 0 errors; every changed line differs only by that key name, and no row was added, removed or renumbered
+- Residual left for a decision, not a mechanical fix: 18 rows carry `_pass_criteria` alongside a legacy `acceptance` key. `--normalize` refuses that pair because it cannot tell which text is the criteria, and promoting pass-proposal text to dispatchable criteria by hand is a provenance judgment, not hygiene — reported rather than guessed
+- QA host blocker re-measured and the headroom has COLLAPSED: `bunker-mvp` `/dev/sda1` is 133G used of 150G (12G available, 93%, load 2.61, up 51 days) at 2026-11-22T21:48Z, below the 94% battery preflight threshold (141G) by only 8G — 17G of headroom 24h earlier, and 11G of the 23G free on 2026-11-17 has been re-consumed. `QA-INFERENCE-ESTIMATOR-README-4` and `QA-INFERENCE-ESTIMATOR-DOCS-1` carry that measurement now, and `DOCS-1` is marked a duplicate of `README-4` (same preflight blocker, same threshold, same 2026-11-03 cycle) for a fold when a lane next drains the board
+- G4 goal card's current state refreshed at HEAD `d96a1c0` (`origin/master` parity 0/0, 0 unpushed, CI run 44953614330 success): `npm test` 15/15 groups in 10.4s plus `test-browser.js` 7 check(s) passed / 0 failed, and `node scripts/verify-board-evidence.js` exit 0 (`77 complete rows, 77 with commit_hash, 0 missing`). Acceptance-gate audit unchanged at 51 open / 5 failing (all `empty`) / 46 passing, with 51/51 open rows cited by a goal card
+- Two documentation gaps re-confirmed live at HEAD and left with their owning rows: `npm run verify:board` still has 0 documentation hits (G1 AC4, `DOC-7`) and `skills/inference-estimator-usage/SKILL.md:31` still claims `10 groups ~3.1s` against a real 15 jsdom groups plus the Playwright leg (G3 AC5, `DOC-5`)
+- Family remains DARK by operator order: 11/11 `inference-estimator` lanes `enabled=0` (standby pause 2026-11-16, last tick 2026-11-16T12:25Z). No lane was enabled, no worker spawned, and the card-manager cron job was confirmed `enabled`/`scheduled` with `next_run_at` advanced
+- This section also satisfies the `Docs consistency` CHANGELOG-freshness check for a board-only commit; the structural exemption that lets board-only commits skip the date comparison remains filed as `IE-CI-003`
+
 ## 2026-11-21
 
 ### Maintenance
