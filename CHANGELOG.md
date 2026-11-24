@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-24
+
+### Maintenance
+- Requirements-plane upkeep from the 2026-11-24 card-manager pass — no product change: `cluster-estimator.html`, `models/`, `docs/`, `scripts/`, `test.js` and `test-browser.js` are byte-unchanged, and the implementation board still holds 128 rows / 77 complete / 51 open with an identical id set before and after (exactly two rows differ, notes only)
+- QA host blocker CLEARED, measured twice in the same minute: `ssh bunker-mvp df -h /` reports `/dev/sda1` 150G size, 47G used, 98G available, 33% used, load 0.00/0.40/2.34, up 53 days — so the ~89G was actively freed, not reset by a reboot. That is ~94G below the 94% battery preflight threshold (141G used) and it breaks the climb the cards have been tracking (85 -> 89 -> 88 -> 82 -> 86 -> 93 -> 91 -> 33%). The 2026-11-23 "91%/15G, 1 point under the 92% watch line" reading is superseded, and host disk is no longer the binding constraint on G4 AC1
+- `QA-INFERENCE-ESTIMATOR-README-4` and `QA-INFERENCE-ESTIMATOR-DOCS-1` each carry a dated 2026-11-24T21:50Z note recording that measurement, so no later lane re-quotes a dead "98% disk" premise; both keep their status (pending) and their empty acceptance criteria — arming them remains the owning QA lane's call, and `DOCS-1` remains the P2 duplicate to fold into `README-4` (P1)
+- The ONLY remaining blocker on the QA battery is the operator standby pause: 11/11 `inference-estimator` lanes `enabled=0` (`disabled_by=api`, standby request 2026-11-16), last family tick 2026-11-16T12:25Z. No lane was enabled and no worker was spawned by this pass
+- G4 goal card's current state refreshed at HEAD `dd1356d` (`origin/master` parity 0/0, 0 unpushed, CI run 45074556777 success + pages 45074556447 success): `node test.js` 15/15 groups passed in 25.2s, `boardctl validate` RESULT OK (118 warnings, 0 errors), acceptance-gate audit unchanged at 51 open / 5 failing (all `empty`; `README-1/2/3` carry measured refutations, `README-4`/`DOCS-1` the cleared host blocker) / 46 passing, and 51/51 open rows cited by a goal card
+- Three live acceptance premises re-verified at HEAD and left with their owning rows: the `README.md:52-55` regeneration block still carries no dependency step (G1 AC3, `README-5-R2` AC1), `npm run verify:board` still has 0 documentation hits in README/docs/skills (G1 AC4, `DOC-7`), and `skills/inference-estimator-usage/SKILL.md:31` still claims `10 groups ~3.1s` against a real 15 jsdom groups plus the Playwright leg (G3 AC5, `DOC-5`)
+- This section also satisfies the `Docs consistency` CHANGELOG-freshness check for a board-only commit; the structural exemption that lets board-only commits skip the date comparison remains filed as `IE-CI-003`
+
 ## 2026-11-22
 
 ### Maintenance
